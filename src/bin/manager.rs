@@ -56,8 +56,10 @@ fn main() {
 
     loop {
         // Update received IPC messages
+        // TODO: maybe block until we get a message type we want?
         messages.update();
 
+        //// UPDATE STATE ////
         // Update cutdown state
         if ground_cmd_msg.msg.arm_cutdown == true {
             cutdown_state_tracker.arm();
