@@ -1,18 +1,17 @@
 extern crate rmp_serde as rmps;
 
-use std::io::Cursor;
+use std::io::{Cursor, Write};
 use std::net::{SocketAddr, UdpSocket};
 use std::sync::mpsc::{Receiver, SyncSender};
 use std::thread;
 use std::time::Duration;
 
 use nng;
-use nng::Protocol;
 use rmp;
-use rmps::Deserializer;
 use serde;
 
-static RX_ADDR: ([u8; 4], u16) = ([127, 0, 0, 1], 6666);
+static UDP_RX_ADDR: ([u8; 4], u16) = ([127, 0, 0, 1], 6666);
+static NNG_TX_ADDR: &str = "ipc://nucleus";
 
 #[derive(Debug, PartialEq, serde::Deserialize)]
 struct LatLon {
@@ -20,12 +19,14 @@ struct LatLon {
     lon: f32,
 }
 
+/// Relays UDP msgpack messages to the IPC sender
+/// Not expected to terminate
 fn eth_rx_loop(thread_tx: SyncSender<Vec<u8>>) {
     let mut buf = [0; 256];
     assert!(buf[255] == 0);
 
 
-    let socket = match UdpSocket::bind(SocketAddr::from(RX_ADDR)) {
+    let socket = match UdpSocket::bind(SocketAddr::from(UDP_RX_ADDR)) {
         Ok(v) => v,
         Err(e) => {
             println!("Creating socket error: {:?}", e);
@@ -33,8 +34,8 @@ fn eth_rx_loop(thread_tx: SyncSender<Vec<u8>>) {
         }
     };
 
-    //socket.set_read_timeout(Some(Duration::from_millis(1000))).unwrap();
 
+    // Loop on listening for UDP packets, and relaying them over to the IPC sender
     loop {
         let (size, _sender_addr) = match socket.recv_from(&mut buf[..]) {
             Ok(v) => {
@@ -46,29 +47,35 @@ fn eth_rx_loop(thread_tx: SyncSender<Vec<u8>>) {
                 continue;
             }
         };
-        //let filled_buf = &buf[..size];
-        //let mut cur = Cursor::new(&buf[..]);
-        //let mut deserializer = Deserializer::new(cur);
 
-        //let actual: LatLon = serde::Deserialize::deserialize(&mut deserializer).unwrap();
-        //let actual = rmp::decode::read_ext_meta(&mut cur);
-        //println!("Received: {:?}", actual);
-
-        thread_tx.send(buf[..size].to_vec());
+        
+        match thread_tx.send(buf[..size].to_vec()) {
+            Ok(_) => (),
+            Err(e) => println!("Error sending eth rx intrapc: {:?}", e),
+        };
     }
 }
 
-fn can_rx_loop(thread_tx: SyncSender<Vec<u8>>) {
-    for _ in 0..255 {
-        thread::sleep(Duration::from_millis(5));
-        //thread_tx.send(0x55);
-    }
+/// Relays msgpack CAN messages to IPC sender thread
+/// Not expected to terminate
+fn can_rx_loop(_thread_tx: SyncSender<Vec<u8>>) {
+    loop {}
 }
 
+/// Construct a NNG message with the given topic
+/// TODO: Move to common code
+fn fmt_nng_msg(topic: &str, body: &[u8]) -> Vec<u8> {
+    [topic.as_bytes(), ":".as_bytes(), body].concat()
+}
+
+/// Receives intra-thread messages to publish to a NNG socket for IPC
+/// Not expected to terminate
 fn ipc_tx_loop(thread_rx: Receiver<Vec<u8>>) {
     // TODO move initialization of sockets to init function, moving into thread
-    let s = nng::Socket::new(nng: Protocol::Pub0)?;
-
+    let s = nng::Socket::new(nng::Protocol::Pub0).unwrap();
+    s.listen(NNG_TX_ADDR).unwrap();
+    let mut out_msg = nng::Message::new().unwrap();
+    // TODO use contexts and spawn threads
 
     loop {
         let buf = match thread_rx.recv() {
@@ -86,6 +93,10 @@ fn ipc_tx_loop(thread_rx: Receiver<Vec<u8>>) {
         let data = buf[(buf.len() - (ext_meta.size as usize))..].to_vec();
 
         // publish message on nng
+        match out_msg.write_all(&fmt_nng_msg("hello", data.as_slice())) {
+            Ok(_) => (),
+            Err(e) => println!("Error sending nng msg: {:?}", e),
+        };
     }
 }
 
