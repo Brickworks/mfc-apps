@@ -35,19 +35,16 @@ fn eth_rx_loop(thread_tx: SyncSender<Vec<u8>>) {
     // Loop on listening for UDP packets, and relaying them over to the IPC sender
     loop {
         let (size, _sender_addr) = match socket.recv_from(&mut buf[..]) {
-            Ok(v) => {
-                v
-            }
+            Ok(v) => v,
             Err(e) => {
                 println! {"Error receiving message: {:?}", e};
                 continue;
             }
         };
 
-        match thread_tx.send(buf[..size].to_vec()) {
-            Ok(_) => (),
-            Err(e) => println!("Error sending eth rx intrapc: {:?}", e),
-        };
+        if let Err(e) = thread_tx.send(buf[..size].to_vec()) {
+            println! {"Error sending eth rx intrapc: {:?}", e};
+        }
     }
 }
 
@@ -77,8 +74,8 @@ fn ipc_tx_loop(thread_rx: Receiver<Vec<u8>>) {
         // listen for messages from other threads
         let buf = match thread_rx.recv() {
             Ok(v) => v,
-            Err(_) => {
-                println!("Channel disconnected");
+            Err(e) => {
+                println!("Channel disconnected: {:?}", e);
                 break;
             }
         };
