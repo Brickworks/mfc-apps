@@ -11,7 +11,8 @@ use rmp;
 use serde;
 
 static UDP_RX_ADDR: ([u8; 4], u16) = ([127, 0, 0, 1], 6666);
-static NNG_TX_ADDR: &str = "ipc://nucleus";
+static NNG_TX_ADDR: &str = "ipc:///tmp/nucleus";
+//static NNG_TX_ADDR: &str = "tcp://localhost:3008";
 
 #[derive(Debug, PartialEq, serde::Deserialize)]
 struct LatLon {
@@ -23,8 +24,6 @@ struct LatLon {
 /// Not expected to terminate
 fn eth_rx_loop(thread_tx: SyncSender<Vec<u8>>) {
     let mut buf = [0; 256];
-    assert!(buf[255] == 0);
-
 
     let socket = match UdpSocket::bind(SocketAddr::from(UDP_RX_ADDR)) {
         Ok(v) => v,
@@ -34,21 +33,18 @@ fn eth_rx_loop(thread_tx: SyncSender<Vec<u8>>) {
         }
     };
 
-
     // Loop on listening for UDP packets, and relaying them over to the IPC sender
     loop {
         let (size, _sender_addr) = match socket.recv_from(&mut buf[..]) {
             Ok(v) => {
-                println!("Received {} byes", v.0);
                 v
-            },
+            }
             Err(e) => {
                 println! {"Error receiving message: {:?}", e};
                 continue;
             }
         };
 
-        
         match thread_tx.send(buf[..size].to_vec()) {
             Ok(_) => (),
             Err(e) => println!("Error sending eth rx intrapc: {:?}", e),
@@ -59,6 +55,8 @@ fn eth_rx_loop(thread_tx: SyncSender<Vec<u8>>) {
 /// Relays msgpack CAN messages to IPC sender thread
 /// Not expected to terminate
 fn can_rx_loop(_thread_tx: SyncSender<Vec<u8>>) {
+    // TODO implement receiving CAN messages
+    // TODO implement sending these messages via intra thread comms
     loop {}
 }
 
@@ -74,10 +72,10 @@ fn ipc_tx_loop(thread_rx: Receiver<Vec<u8>>) {
     // TODO move initialization of sockets to init function, moving into thread
     let s = nng::Socket::new(nng::Protocol::Pub0).unwrap();
     s.listen(NNG_TX_ADDR).unwrap();
-    let mut out_msg = nng::Message::new().unwrap();
     // TODO use contexts and spawn threads
 
     loop {
+        // listen for messages from other threads
         let buf = match thread_rx.recv() {
             Ok(v) => v,
             Err(_) => {
@@ -90,12 +88,18 @@ fn ipc_tx_loop(thread_rx: Receiver<Vec<u8>>) {
         let ext_meta = rmp::decode::read_ext_meta(&mut Cursor::new(&buf)).unwrap();
 
         // chop off extension, this might be janky? TODO find a better way
-        let data = buf[(buf.len() - (ext_meta.size as usize))..].to_vec();
+        let data = &buf[(buf.len() - (ext_meta.size as usize))..];
 
-        // publish message on nng
-        match out_msg.write_all(&fmt_nng_msg("hello", data.as_slice())) {
+        let mut nng_msg = nng::Message::new().unwrap();
+
+        // TODO add ext meta to topic lookup table
+        let msg_content = fmt_nng_msg("testing", data);
+
+        // publish nng_msg on nng
+        nng_msg.write_all(msg_content.as_slice()).unwrap();
+        match s.send(nng_msg) {
             Ok(_) => (),
-            Err(e) => println!("Error sending nng msg: {:?}", e),
+            Err(e) => println!("Failed to send ipc msg: {:?}", e),
         };
     }
 }
@@ -105,15 +109,11 @@ fn main() {
     let (eth_thread_sender, thread_rx) = std::sync::mpsc::sync_channel(1);
     let can_thread_sender = eth_thread_sender.clone();
 
-    let eth_rx_handler = thread::spawn(move || { eth_rx_loop(eth_thread_sender) });
-    let can_rx_hander = thread::spawn(|| { can_rx_loop(can_thread_sender) });
-    let ipc_tx_handler = thread::spawn(|| { ipc_tx_loop(thread_rx) });
+    let eth_rx_handler = thread::spawn(move || eth_rx_loop(eth_thread_sender));
+    let can_rx_hander = thread::spawn(|| can_rx_loop(can_thread_sender));
+    let ipc_tx_handler = thread::spawn(|| ipc_tx_loop(thread_rx));
 
-    match eth_rx_handler.join() {
-        Ok(_) => println!("eth_rx Shit worked out"),
-        Err(e) => println!("eth_rx Error: {:?}", e)
-    }
+    eth_rx_handler.join().unwrap();
     can_rx_hander.join().unwrap();
-
     ipc_tx_handler.join().unwrap();
 }
