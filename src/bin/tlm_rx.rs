@@ -4,7 +4,6 @@ use std::io::{Cursor, Write};
 use std::net::{SocketAddr, UdpSocket};
 use std::sync::mpsc::{Receiver, SyncSender};
 use std::thread;
-use std::time::Duration;
 
 use nng;
 use rmp;
