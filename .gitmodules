@@ -1,0 +1,3 @@
+[submodule "altitude_control/nng"]
+	path = altitude_control/nng
+	url = git@github.com:nanomsg/nng.git
