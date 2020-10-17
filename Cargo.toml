@@ -9,9 +9,8 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-nucleus_common = { path= "../nucleus_common" }
-
 nng = "0.5.1"
+rmp = "0.8.9"
 rmp-serde = "0.14.4"
 
 #tmp
