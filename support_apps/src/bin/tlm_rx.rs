@@ -1,5 +1,6 @@
 extern crate rmp_serde as rmps;
 
+use std::collections::HashMap;
 use std::io::{Cursor, Write};
 use std::net::{SocketAddr, UdpSocket};
 use std::sync::mpsc::{Receiver, SyncSender};
@@ -62,6 +63,8 @@ fn fmt_nng_msg(topic: &str, body: &[u8]) -> Vec<u8> {
     [topic.as_bytes(), ":".as_bytes(), body].concat()
 }
 
+//static ext_to_topic_map: HashMap<u8, &str> = [
+
 /// Receives intra-thread messages to publish to a NNG socket for IPC
 /// Not expected to terminate
 fn ipc_tx_loop(thread_rx: Receiver<Vec<u8>>) {
@@ -69,6 +72,15 @@ fn ipc_tx_loop(thread_rx: Receiver<Vec<u8>>) {
     let s = nng::Socket::new(nng::Protocol::Pub0).unwrap();
     s.listen(NNG_TX_ADDR).unwrap();
     // TODO use contexts and spawn threads
+
+    // maps incoming messages to their local ipc topics
+    let ext_to_topic_map: HashMap<u8, &str> = [
+        (1, "balloon"),
+        (2, "power"),
+        (3, "ground"),
+        (4, "avionics"),
+        (5, "altctrl"),
+    ].iter().cloned().collect();
 
     loop {
         // listen for messages from other threads
