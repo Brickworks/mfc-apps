@@ -1,24 +1,28 @@
 use std::{fmt, thread, time};
 
+<<<<<<< HEAD
 #[derive(Eq, PartialEq)]
+=======
+#[derive(Copy, Clone)]
+>>>>>>> CTRL: state machine first try
 enum ControlMode {
-    Initializing,
+    Init,
     Safe,
     Idle,
-    Raising,
-    Lowering,
-    Dumping,
+    Vent,
+    Dump,
+    Abort,
 }
 
 impl fmt::Display for ControlMode {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
        match *self {
-           ControlMode::Initializing => write!(f, "Initializing"),
+           ControlMode::Init => write!(f, "Init"),
            ControlMode::Safe => write!(f, "Safe"),
            ControlMode::Idle => write!(f, "Idle"),
-           ControlMode::Raising => write!(f, "Raising"),
-           ControlMode::Lowering => write!(f, "Lowering"),
-           ControlMode::Dumping => write!(f, "Dumping"),
+           ControlMode::Dump => write!(f, "Dump"),
+           ControlMode::Vent => write!(f, "Vent"),
+           ControlMode::Abort => write!(f, "Abort"),
        }
     }
 }
@@ -67,10 +71,13 @@ impl Valve {
 
 struct Controller {
     state: ControlMode,
+    pwm_vent: usize,
+    pwm_ballast: usize,
 }
 
 impl Controller {
     fn init() -> Self {
+<<<<<<< HEAD
         Controller { 
             state: ControlMode::Initializing,
         }
@@ -111,11 +118,73 @@ impl Controller {
         // change mode to Idle if altitude is within controller "Dead zone"
         // TODO: allow loop to be interrupted by other reinforced commands
         println!("The code for the Stabilize command hasn't been written yet!");
+=======
+        Controller {
+            state: ControlMode::Init,
+            pwm_vent: 0,
+            pwm_ballast: 0,
+        }
+    }
+    fn cycle(&mut self) {
+        let next = match self.state {
+            ControlMode::Init => {
+                ControlMode::Safe
+            }
+            ControlMode::Safe => {
+                ControlMode::Idle
+            }
+            ControlMode::Idle => {
+                ControlMode::Dump
+            }
+            ControlMode::Dump => {
+                ControlMode::Vent
+            }
+            ControlMode::Vent => {
+                ControlMode::Idle
+            }
+            ControlMode::Abort => {
+                ControlMode::Safe
+            }
+        };
+        self.state = next;
+        println!("{:} \t| pwm vent: {} \t| pwm ballast: {}", self.state, self.pwm_vent, self.pwm_ballast);
+    }
+    fn safe(&mut self) {
+        self.state = ControlMode::Safe;
+        self.pwm_vent = 0;
+        self.pwm_ballast = 0;
+        println!("{:} \t| pwm vent: {} \t| pwm ballast: {}", self.state, self.pwm_vent, self.pwm_ballast);
+    }
+    fn abort(&mut self) {
+        self.state = ControlMode::Abort;
+        self.pwm_vent = 0;
+        self.pwm_ballast = 1;
+        println!("{:} \t| pwm vent: {} \t| pwm ballast: {}", self.state, self.pwm_vent, self.pwm_ballast);
+    }
+    fn idle(&mut self) {
+        let new_state = match self.state {
+            ControlMode::Safe => {
+                ControlMode::Idle
+            },
+            ControlMode::Vent => {
+                ControlMode::Idle
+            },
+            ControlMode::Dump => {
+                ControlMode::Idle
+            },
+            _ => self.state,
+        };
+        self.state = new_state;
+        self.pwm_vent = 0;
+        self.pwm_ballast = 0;
+        println!("{:} \t| pwm vent: {} \t| pwm ballast: {}", self.state, self.pwm_vent, self.pwm_ballast);
+>>>>>>> CTRL: state machine first try
     }
 }
 
 fn main() {
     // test state transitions here
+<<<<<<< HEAD
     let mut controller = Controller::init(); // initialize the controller
     controller.safe(); // start in safe mode
     controller.idle(); // transition to idle
@@ -141,5 +210,21 @@ fn main() {
     ballast_valve.lock();
     ballast_valve.set_pwm(0.5);
     println!("{:} PWM is {:}", ballast_valve.name, ballast_valve.pwm);
+=======
+    controller.cycle();
+    controller.cycle();
+    controller.cycle();
+    controller.cycle();
+    controller.cycle();
+    controller.idle();
+    controller.cycle();
+    controller.cycle();
+    controller.cycle();
+    controller.cycle();
+    controller.abort();
+    controller.cycle();
+    controller.cycle();
+    controller.safe();
+>>>>>>> CTRL: state machine first try
     
 }
