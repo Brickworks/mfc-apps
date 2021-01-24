@@ -152,5 +152,4 @@ fn main() {
     controller.cycle();
     controller.cycle();
     controller.safe();
-    
 }
