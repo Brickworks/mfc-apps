@@ -73,15 +73,15 @@ impl Valve {
     }
 }
 
-struct ControlState {
+struct ControlMngr {
     state: ControlMode,
     valve_vent: Valve,
     valve_dump: Valve,
 }
 
-impl ControlState {
+impl ControlMngr {
     fn init(valve_vent: Valve, valve_dump: Valve) -> Self {
-        ControlState {
+        ControlMngr {
             state: ControlMode::Init,
             valve_vent,
             valve_dump,
@@ -197,58 +197,61 @@ impl ControlState {
             previous_state, self.state
         );
     }
+    fn update_pwm(&mut self) {
+        
+    }
 }
 
 fn main() {
     let balloon_valve = Valve::init(0, String::from("BalloonValve"));
     let ballast_valve = Valve::init(1, String::from("BallastValve"));
-    let mut control_state = ControlState::init(balloon_valve, ballast_valve);
+    let mut ctrl_manager = ControlMngr::init(balloon_valve, ballast_valve);
 
     // test state transitions here
-    control_state.idle();
-    control_state.safe();
-    control_state.idle();
-    control_state.start_control();
+    ctrl_manager.idle();
+    ctrl_manager.safe();
+    ctrl_manager.idle();
+    ctrl_manager.start_control();
     println!(
         "balloon pwm {:} | ballast pwm {:}",
-        control_state.valve_vent.get_pwm(),
-        control_state.valve_dump.get_pwm()
+        ctrl_manager.valve_vent.get_pwm(),
+        ctrl_manager.valve_dump.get_pwm()
     );
-    control_state.vent();
+    ctrl_manager.vent();
     println!(
         "balloon pwm {:} | ballast pwm {:}",
-        control_state.valve_vent.get_pwm(),
-        control_state.valve_dump.get_pwm()
+        ctrl_manager.valve_vent.get_pwm(),
+        ctrl_manager.valve_dump.get_pwm()
     );
-    control_state.valve_vent.set_pwm(0.5);
+    ctrl_manager.valve_vent.set_pwm(0.5);
     println!(
         "balloon pwm {:} | ballast pwm {:}",
-        control_state.valve_vent.get_pwm(),
-        control_state.valve_dump.get_pwm()
+        ctrl_manager.valve_vent.get_pwm(),
+        ctrl_manager.valve_dump.get_pwm()
     );
-    control_state.valve_dump.set_pwm(0.5);
+    ctrl_manager.valve_dump.set_pwm(0.5);
     println!(
         "balloon pwm {:} | ballast pwm {:}",
-        control_state.valve_vent.get_pwm(),
-        control_state.valve_dump.get_pwm()
+        ctrl_manager.valve_vent.get_pwm(),
+        ctrl_manager.valve_dump.get_pwm()
     );
-    control_state.dump();
+    ctrl_manager.dump();
     println!(
         "balloon pwm {:} | ballast pwm {:}",
-        control_state.valve_vent.get_pwm(),
-        control_state.valve_dump.get_pwm()
+        ctrl_manager.valve_vent.get_pwm(),
+        ctrl_manager.valve_dump.get_pwm()
     );
-    control_state.valve_dump.set_pwm(0.5);
+    ctrl_manager.valve_dump.set_pwm(0.5);
     println!(
         "balloon pwm {:} | ballast pwm {:}",
-        control_state.valve_vent.get_pwm(),
-        control_state.valve_dump.get_pwm()
+        ctrl_manager.valve_vent.get_pwm(),
+        ctrl_manager.valve_dump.get_pwm()
     );
-    control_state.abort();
+    ctrl_manager.abort();
     println!(
         "balloon pwm {:} | ballast pwm {:}",
-        control_state.valve_vent.get_pwm(),
-        control_state.valve_dump.get_pwm()
+        ctrl_manager.valve_vent.get_pwm(),
+        ctrl_manager.valve_dump.get_pwm()
     );
-    control_state.vent();
+    ctrl_manager.vent();
 }
