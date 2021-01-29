@@ -1,6 +1,6 @@
 use std::fmt;
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq)]
 enum ControlMode {
     Init,
     Safe,
@@ -12,14 +12,14 @@ enum ControlMode {
 
 impl fmt::Display for ControlMode {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-       match *self {
-           ControlMode::Init => write!(f, "Init"),
-           ControlMode::Safe => write!(f, "Safe"),
-           ControlMode::Idle => write!(f, "Idle"),
-           ControlMode::Dump => write!(f, "Dump"),
-           ControlMode::Vent => write!(f, "Vent"),
-           ControlMode::Abort => write!(f, "Abort"),
-       }
+        match *self {
+            ControlMode::Init => write!(f, "Init"),
+            ControlMode::Safe => write!(f, "Safe"),
+            ControlMode::Idle => write!(f, "Idle"),
+            ControlMode::Dump => write!(f, "Dump"),
+            ControlMode::Vent => write!(f, "Vent"),
+            ControlMode::Abort => write!(f, "Abort"),
+        }
     }
 }
 
@@ -28,6 +28,16 @@ struct Valve {
     name: String,
     pwm: f32,
     locked: bool,
+}
+
+impl fmt::Display for Valve {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{:} [valve_id: {:}] @ PWM {:}",
+            self.name, self.id, self.pwm
+        )
+    }
 }
 
 impl Valve {
@@ -40,116 +50,205 @@ impl Valve {
             locked: true,
         }
     }
-
     fn is_locked(&self) -> bool {
         return self.locked;
     }
-
     fn set_pwm(&mut self, pwm_value: f32) {
         if self.is_locked() == false {
             self.pwm = pwm_value;
         } else {
-            println!("{:} must be unlocked to set PWM!", self.name);
+            println!("Cannot set PWM because {:} is locked!", self.name);
         }
     }
-
-    fn lock(&mut self) {
-        self.pwm = 0.0;
-        self.locked = true;
-        println!("Locked {:}", &self.name);
+    fn get_pwm(&self) -> f32 {
+        return self.pwm;
     }
-
+    fn lock(&mut self) {
+        self.locked = true;
+        // println!("Locking {:} [{:}]", &self.name, &self.id);
+    }
     fn unlock(&mut self) {
         self.locked = false;
-        println!("Unlocked {:}", &self.name);
+        // println!("Unlocking {:} [{:}]", &self.name, &self.id);
     }
 }
 
-struct Controller {
+struct ControlState {
     state: ControlMode,
-    pwm_vent: usize,
-    pwm_ballast: usize,
+    valve_vent: Valve,
+    valve_dump: Valve,
 }
 
-impl Controller {
-    fn init() -> Self {
-        Controller {
+impl ControlState {
+    fn init(valve_vent: Valve, valve_dump: Valve) -> Self {
+        ControlState {
             state: ControlMode::Init,
-            pwm_vent: 0,
-            pwm_ballast: 0,
+            valve_vent,
+            valve_dump,
         }
     }
-    fn cycle(&mut self) {
-        let next = match self.state {
-            ControlMode::Init => {
-                ControlMode::Safe
-            }
-            ControlMode::Safe => {
-                ControlMode::Idle
-            }
-            ControlMode::Idle => {
-                ControlMode::Dump
-            }
-            ControlMode::Dump => {
-                ControlMode::Vent
-            }
-            ControlMode::Vent => {
-                ControlMode::Idle
-            }
-            ControlMode::Abort => {
-                ControlMode::Safe
-            }
-        };
-        self.state = next;
-        println!("{:} \t| pwm vent: {} \t| pwm ballast: {}", self.state, self.pwm_vent, self.pwm_ballast);
-    }
     fn safe(&mut self) {
+        let previous_state = self.state;
+        // unlock the valves if they are locked to force the next step!
+        self.valve_vent.unlock();
+        self.valve_dump.unlock();
+        // execute state transition
         self.state = ControlMode::Safe;
-        self.pwm_vent = 0;
-        self.pwm_ballast = 0;
-        println!("{:} \t| pwm vent: {} \t| pwm ballast: {}", self.state, self.pwm_vent, self.pwm_ballast);
+        println!(
+            "CtrlMode transition: {:} --> {:}",
+            previous_state, self.state
+        );
+        // lock the vent valve closed
+        self.valve_vent.set_pwm(0.0);
+        self.valve_vent.lock();
+        // lock the dump valve closed
+        self.valve_dump.set_pwm(0.0);
+        self.valve_dump.lock();
     }
     fn abort(&mut self) {
+        let previous_state = self.state;
+        // unlock the valves if they are locked to force the next step!
+        self.valve_vent.unlock();
+        self.valve_dump.unlock();
+        // execute state transition
         self.state = ControlMode::Abort;
-        self.pwm_vent = 0;
-        self.pwm_ballast = 1;
-        println!("{:} \t| pwm vent: {} \t| pwm ballast: {}", self.state, self.pwm_vent, self.pwm_ballast);
+        println!(
+            "CtrlMode transition: {:} --> {:}",
+            previous_state, self.state
+        );
+        // lock the vent valve closed
+        self.valve_vent.set_pwm(0.0);
+        self.valve_vent.lock();
+        // lock the dump valve open
+        self.valve_dump.set_pwm(1.0);
+        self.valve_dump.lock();
     }
     fn idle(&mut self) {
-        let new_state = match self.state {
-            ControlMode::Safe => {
+        let previous_state = self.state;
+        if previous_state != ControlMode::Safe && previous_state != ControlMode::Abort {
+            // unlock the valves
+            self.valve_vent.unlock();
+            self.valve_dump.unlock();
+            self.state = ControlMode::Idle;
+            println!(
+                "CtrlMode transition: {:} --> {:}",
+                previous_state, self.state
+            );
+        } else {
+            println!(
+                "CtrlMode transition ({:} --> {:}) not allowed! Ignoring...",
+                previous_state,
                 ControlMode::Idle
-            },
-            ControlMode::Vent => {
+            );
+        }
+    }
+    fn vent(&mut self) {
+        let previous_state = self.state;
+        if previous_state == ControlMode::Idle || previous_state == ControlMode::Dump {
+            // stop dumping -- can only do one at a time!
+            self.valve_dump.set_pwm(0.0);
+            self.valve_dump.lock();
+            // enable venting
+            self.valve_vent.unlock();
+            self.state = ControlMode::Vent;
+            println!(
+                "CtrlMode transition: {:} --> {:}",
+                previous_state, self.state
+            );
+        } else {
+            println!(
+                "CtrlMode transition ({:} --> {:}) not allowed! Ignoring...",
+                previous_state,
                 ControlMode::Idle
-            },
-            ControlMode::Dump => {
+            );
+        }
+    }
+    fn dump(&mut self) {
+        let previous_state = self.state;
+        if previous_state == ControlMode::Idle || previous_state == ControlMode::Vent {
+            // stop vemtomg -- can only do one at a time!
+            self.valve_vent.set_pwm(0.0);
+            self.valve_vent.lock();
+            // enable dumping
+            self.valve_dump.unlock();
+            self.state = ControlMode::Dump;
+            println!(
+                "CtrlMode transition: {:} --> {:}",
+                previous_state, self.state
+            );
+        } else {
+            println!(
+                "CtrlMode transition ({:} --> {:}) not allowed! Ignoring...",
+                previous_state,
                 ControlMode::Idle
-            },
-            _ => self.state,
-        };
-        self.state = new_state;
-        self.pwm_vent = 0;
-        self.pwm_ballast = 0;
-        println!("{:} \t| pwm vent: {} \t| pwm ballast: {}", self.state, self.pwm_vent, self.pwm_ballast);
+            );
+        }
+    }
+    fn start_control(&mut self) {
+        let previous_state = self.state;
+        println!("Enabling altitude control system!");
+        // unlock the valves if they are locked to force the next step!
+        self.valve_vent.unlock();
+        self.valve_dump.unlock();
+        // execute state transition
+        self.state = ControlMode::Idle;
+        println!(
+            "CtrlMode transition: {:} --> {:}",
+            previous_state, self.state
+        );
     }
 }
 
 fn main() {
-    let mut controller = Controller::init();
+    let balloon_valve = Valve::init(0, String::from("BalloonValve"));
+    let ballast_valve = Valve::init(1, String::from("BallastValve"));
+    let mut control_state = ControlState::init(balloon_valve, ballast_valve);
+
     // test state transitions here
-    controller.cycle();
-    controller.cycle();
-    controller.cycle();
-    controller.cycle();
-    controller.cycle();
-    controller.idle();
-    controller.cycle();
-    controller.cycle();
-    controller.cycle();
-    controller.cycle();
-    controller.abort();
-    controller.cycle();
-    controller.cycle();
-    controller.safe();
+    control_state.idle();
+    control_state.safe();
+    control_state.idle();
+    control_state.start_control();
+    println!(
+        "balloon pwm {:} | ballast pwm {:}",
+        control_state.valve_vent.get_pwm(),
+        control_state.valve_dump.get_pwm()
+    );
+    control_state.vent();
+    println!(
+        "balloon pwm {:} | ballast pwm {:}",
+        control_state.valve_vent.get_pwm(),
+        control_state.valve_dump.get_pwm()
+    );
+    control_state.valve_vent.set_pwm(0.5);
+    println!(
+        "balloon pwm {:} | ballast pwm {:}",
+        control_state.valve_vent.get_pwm(),
+        control_state.valve_dump.get_pwm()
+    );
+    control_state.valve_dump.set_pwm(0.5);
+    println!(
+        "balloon pwm {:} | ballast pwm {:}",
+        control_state.valve_vent.get_pwm(),
+        control_state.valve_dump.get_pwm()
+    );
+    control_state.dump();
+    println!(
+        "balloon pwm {:} | ballast pwm {:}",
+        control_state.valve_vent.get_pwm(),
+        control_state.valve_dump.get_pwm()
+    );
+    control_state.valve_dump.set_pwm(0.5);
+    println!(
+        "balloon pwm {:} | ballast pwm {:}",
+        control_state.valve_vent.get_pwm(),
+        control_state.valve_dump.get_pwm()
+    );
+    control_state.abort();
+    println!(
+        "balloon pwm {:} | ballast pwm {:}",
+        control_state.valve_vent.get_pwm(),
+        control_state.valve_dump.get_pwm()
+    );
+    control_state.vent();
 }
