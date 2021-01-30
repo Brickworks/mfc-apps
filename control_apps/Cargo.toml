@@ -9,3 +9,4 @@ edition = "2018"
 [dependencies]
 pid_control = "0.7.2"
 linearkalman = "0.1.3"
+rulinalg = "0.4.2"
