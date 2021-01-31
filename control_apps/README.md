@@ -1,6 +1,12 @@
 # Control Applications
 These apps dictate controls algorithms such as altitude control.
 
+# Usage
+```
+cargo build # compile the app
+RUST_LOG=info cargo run # run the app with pretty printing [debug, info, warn]
+```
+
 ## Resources:
 - https://doc.rust-lang.org/book/ch06-03-if-let.html
 - https://www.reddit.com/r/rust/comments/6tldct/state_machine_best_practices/

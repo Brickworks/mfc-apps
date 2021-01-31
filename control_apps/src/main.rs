@@ -2,7 +2,12 @@ use std::fmt;
 use std::thread;
 use std::time::Duration;
 
+extern crate pretty_env_logger;
+#[macro_use]
+extern crate log;
+
 // -- CONSTANTS --
+const POST_DELAY_MS: u64 = 1000; // bogus delay to emulate POST operations
 const CTRL_ALTITUDE_FLOOR: f32 = 15000.0; // minimum allowed altitude in meters
 const DEFAULT_TARGET_ALTITUDE: f32 = 99999.9; // default target alt in meters
 const CTRL_ERROR_DEADZONE: f32 = 100.0; // magnitude of margin to allow
@@ -63,18 +68,14 @@ impl fmt::Display for ControlMode {
 
 impl fmt::Display for Valve {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "{:} [valve_id: {:}] @ PWM {:}",
-            self.name, self.id, self.pwm
-        )
+        write!(f, "{:} [valve_id: {:}]", self.name, self.id)
     }
 }
 
 // -- METHODS --
 impl Valve {
     fn init(valve_id: u8, valve_name: String) -> Self {
-        println!("Initializing valve: {:} (id: {:})", valve_name, valve_id);
+        info!("Initializing valve: {:} (id: {:})", valve_name, valve_id);
         Valve {
             id: valve_id,     // integer device identifier
             name: valve_name, // device nickname
@@ -91,7 +92,7 @@ impl Valve {
         if self.is_locked() == false {
             self.pwm = pwm_value;
         } else {
-            println!("Not allowed to set PWM when {:} is locked!", self.name);
+            warn!("Not allowed to set PWM when {:} is locked!", self.name);
         }
     }
     fn get_pwm(&self) -> f32 {
@@ -125,13 +126,10 @@ impl ControlMngr {
         valve_dump: Valve,
         gains_dump: PIDgains,
     ) -> Self {
-        println!(
-            "Initializing Control Manager with \
-             \n> vent valve: {:} \
-             \n> dump valve: {:} \
-             \n> target alt: {:}",
-            valve_vent, valve_dump, DEFAULT_TARGET_ALTITUDE
-        );
+        info!("Initializing Control Manager...");
+        info!("\tvent valve {:}", valve_vent);
+        info!("\tdump valve {:}", valve_dump);
+        info!("\ttarget alt {:}", DEFAULT_TARGET_ALTITUDE);
         return ControlMngr {
             mode: ControlMode::Init,
             valve_vent,
@@ -150,7 +148,7 @@ impl ControlMngr {
         self.valve_dump.unlock();
         // execute mode transition
         self.mode = ControlMode::Safe;
-        println!("CtrlMode transition: {:} --> {:}", previous_mode, self.mode);
+        warn!("CtrlMode transition: {:} --> {:}", previous_mode, self.mode);
         // lock the vent valve closed
         self.valve_vent.set_pwm(0.0);
         self.valve_vent.lock();
@@ -166,7 +164,7 @@ impl ControlMngr {
         self.valve_dump.unlock();
         // execute mode transition
         self.mode = ControlMode::Abort;
-        println!("CtrlMode transition: {:} --> {:}", previous_mode, self.mode);
+        warn!("CtrlMode transition: {:} --> {:}", previous_mode, self.mode);
         // lock the vent valve closed
         self.valve_vent.set_pwm(0.0);
         self.valve_vent.lock();
@@ -185,9 +183,9 @@ impl ControlMngr {
             self.valve_vent.unlock();
             self.valve_dump.unlock();
             self.mode = ControlMode::Idle;
-            println!("CtrlMode transition: {:} --> {:}", previous_mode, self.mode);
+            info!("CtrlMode transition: {:} --> {:}", previous_mode, self.mode);
         } else {
-            println!(
+            warn!(
                 "CtrlMode transition ({:} --> {:}) not allowed! Ignoring...",
                 previous_mode,
                 ControlMode::Idle
@@ -204,9 +202,9 @@ impl ControlMngr {
             // enable venting
             self.valve_vent.unlock();
             self.mode = ControlMode::Vent;
-            println!("CtrlMode transition: {:} --> {:}", previous_mode, self.mode);
+            info!("CtrlMode transition: {:} --> {:}", previous_mode, self.mode);
         } else {
-            println!(
+            warn!(
                 "CtrlMode transition ({:} --> {:}) not allowed! Ignoring...",
                 previous_mode,
                 ControlMode::Idle
@@ -223,9 +221,9 @@ impl ControlMngr {
             // enable dumping
             self.valve_dump.unlock();
             self.mode = ControlMode::Dump;
-            println!("CtrlMode transition: {:} --> {:}", previous_mode, self.mode);
+            info!("CtrlMode transition: {:} --> {:}", previous_mode, self.mode);
         } else {
-            println!(
+            warn!(
                 "CtrlMode transition ({:} --> {:}) not allowed! Ignoring...",
                 previous_mode,
                 ControlMode::Idle
@@ -241,16 +239,16 @@ impl ControlMngr {
         if target_altitude > CTRL_ALTITUDE_FLOOR {
             // target must be above the minimum allowed altitude
             self.target_altitude = target_altitude;
-            println!("New target altitude: {:}", self.target_altitude);
+            info!("New target altitude: {:}", self.target_altitude);
         } else {
-            println!(
+            warn!(
                 "Not allowed to set target altitude below {:}! Ignoring...",
                 CTRL_ALTITUDE_FLOOR
             );
         }
     }
     fn print_pwm(&self) {
-        println!(
+        debug!(
             "balloon pwm {:} ({:}) | ballast pwm {:} ({:})",
             self.valve_vent.get_pwm(),
             self.valve_vent.print_lock_status(),
@@ -262,15 +260,15 @@ impl ControlMngr {
         // enable altitude control+transition to idle
         let previous_mode = self.mode;
         if previous_mode == ControlMode::Safe {
-            println!("Enabling altitude control system!");
+            info!("Enabling altitude control system!");
             // unlock the valves if they are locked to force the next step!
             self.valve_vent.unlock();
             self.valve_dump.unlock();
             // execute mode transition
             self.mode = ControlMode::Idle;
-            println!("CtrlMode transition: {:} --> {:}", previous_mode, self.mode);
+            info!("CtrlMode transition: {:} --> {:}", previous_mode, self.mode);
         } else {
-            println!(
+            warn!(
                 "Not allowed to enable control from {:} mode! Ignoring...",
                 previous_mode
             );
@@ -278,10 +276,11 @@ impl ControlMngr {
     }
     fn power_on_self_test(&mut self) {
         // turn on and test devices to look for errors
-        println!("Power On Self Test\n> starting POST...");
-        thread::sleep(Duration::from_millis(4000)); // hard-coded wait to check
-                                                    // when POST is complete, transition from idle to safe
-        println!("> POST complete!");
+        info!("Starting Power-On Self Test...");
+        // hard-coded wait to check
+        thread::sleep(Duration::from_millis(POST_DELAY_MS));
+        info!("POST complete!");
+        // when POST is complete, transition from idle to safe
         self.safe()
     }
     fn update_pwm(
@@ -290,7 +289,7 @@ impl ControlMngr {
         ballast_mass: f32, // ballast mass remining in kg
     ) {
         // execute control algorithm and update vent and dump valve PWM values
-        println!("Tick!");
+        debug!("Tick!");
         // check abort criteria
         abort_if_too_low(self, gps_altitude);
         abort_if_out_of_ballast(self, ballast_mass);
@@ -323,7 +322,7 @@ impl ControlMngr {
     }
     fn eval_pid(&mut self, error: f32, last_error: f32, gains: PIDgains) -> f32 {
         let control_effort = gains.k_p * error + gains.k_d * (error - last_error);
-        println!("--> altitude error: {:}", error);
+        debug!("--> altitude error: {:}", error);
         return control_effort;
     }
 }
@@ -332,8 +331,8 @@ impl ControlMngr {
 fn abort_if_too_low(ctrl_manager: &mut ControlMngr, altitude: f32) {
     if altitude <= CTRL_ALTITUDE_FLOOR {
         // abort if the altitude is at or below the allowable limit
-        println!(
-            "Altitude is too low!\n> Current Alt: {:}m\n> Min allowed: {:}m",
+        warn!(
+            "Altitude is too low! Current Alt: {:}m / Min allowed: {:}m",
             altitude, CTRL_ALTITUDE_FLOOR
         );
         ctrl_manager.abort()
@@ -344,10 +343,7 @@ fn abort_if_too_low(ctrl_manager: &mut ControlMngr, altitude: f32) {
 fn abort_if_out_of_ballast(ctrl_manager: &mut ControlMngr, ballast_mass: f32) {
     if ballast_mass <= 0.0 {
         // abort if there is no ballast left
-        println!(
-            "Not enough ballast mass!\n> Ballast mass: {:}kg",
-            ballast_mass
-        );
+        warn!("Not enough ballast mass! Ballast mass: {:}kg", ballast_mass);
         ctrl_manager.abort()
     }
     // otherwise carry on
@@ -392,22 +388,22 @@ fn test_control_mngr(ctrl_manager: &mut ControlMngr, target_altitude: f32) {
 
 // -- MAIN --
 fn main() {
+    pretty_env_logger::init(); // initialize pretty print
     let target_altitude = 25000.0; // meters
     let balloon_valve = Valve::init(0, String::from("BalloonValve"));
     let ballast_valve = Valve::init(1, String::from("BallastValve"));
     let vent_gains = PIDgains {
-        k_p: 1.0,
-        k_i: 0.0,
-        k_d: 0.1,
-        k_n: 1.0,
+        k_p: 0.00001,
+        k_i: 0.00001,
+        k_d: 0.00000,
+        k_n: 1.00000,
     };
     let dump_gains = PIDgains {
-        k_p: 1.0,
-        k_i: 0.0,
-        k_d: 0.1,
-        k_n: 1.0,
+        k_p: 0.00001,
+        k_i: 0.00001,
+        k_d: 0.00000,
+        k_n: 1.00000,
     };
     let mut ctrl_manager = ControlMngr::init(balloon_valve, vent_gains, ballast_valve, dump_gains);
-
     test_control_mngr(&mut ctrl_manager, target_altitude);
 }
