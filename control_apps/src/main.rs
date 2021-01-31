@@ -5,6 +5,7 @@ use std::time::Duration;
 // -- CONSTANTS --
 const CTRL_ALTITUDE_FLOOR: f32 = 15000.0; // minimum allowed altitude in meters
 const DEFAULT_TARGET_ALTITUDE: f32 = 99999.9; // default target alt in meters
+const CTRL_ERROR_DEADZONE: f32 = 100.0; // magnitude of margin to allow
 
 // -- DATA STRUCTURES --
 #[derive(Copy, Clone, PartialEq)]
@@ -28,10 +29,22 @@ struct Valve {
 
 struct ControlMngr {
     // Master altitude control state machine
-    state: ControlMode,
+    mode: ControlMode,
     valve_vent: Valve,    // valve to actuate in order to lower altitude
     valve_dump: Valve,    // valve to actuate in order to raise altitude
+    gains_vent: PIDgains, // PID gains used when venting
+    gains_dump: PIDgains, // PID gains used when dumping
     target_altitude: f32, // target altitude hold in meters
+    altitude_error: f32,  // last known altitude error
+}
+
+#[derive(Copy, Clone)]
+struct PIDgains {
+    // Gains for PID control
+    pub k_p: f32, // proportional error gain
+    pub k_i: f32, // integral error gain
+    pub k_d: f32, // derivative error gain
+    pub k_n: f32, // derivative error filter coefficient
 }
 
 // -- FORMATTING FOR DISPLAY --
@@ -56,16 +69,6 @@ impl fmt::Display for Valve {
             self.name, self.id, self.pwm
         )
     }
-}
-
-fn display_pwm(ctrl_manager: &ControlMngr) {
-    println!(
-        "balloon pwm {:} ({:}) | ballast pwm {:} ({:})",
-        ctrl_manager.valve_vent.get_pwm(), 
-        ctrl_manager.valve_vent.print_lock_status(),
-        ctrl_manager.valve_dump.get_pwm(),
-        ctrl_manager.valve_dump.print_lock_status()
-    );
 }
 
 // -- METHODS --
@@ -108,15 +111,20 @@ impl Valve {
     fn print_lock_status(&self) -> &str {
         // return a string "locked"/"unlocked" depending on valve's lock status
         if self.is_locked() {
-            return "locked"
+            return "locked";
         } else {
-            return "unlocked"
+            return "unlocked";
         }
     }
 }
 
 impl ControlMngr {
-    fn init(valve_vent: Valve, valve_dump: Valve) -> Self {
+    fn init(
+        valve_vent: Valve,
+        gains_vent: PIDgains,
+        valve_dump: Valve,
+        gains_dump: PIDgains,
+    ) -> Self {
         println!(
             "Initializing Control Manager with \
              \n> vent valve: {:} \
@@ -125,24 +133,24 @@ impl ControlMngr {
             valve_vent, valve_dump, DEFAULT_TARGET_ALTITUDE
         );
         return ControlMngr {
-            state: ControlMode::Init,
-            valve_vent,                               // valve used to lower altitude
-            valve_dump,                               // valve used to raise altitude
-            target_altitude: DEFAULT_TARGET_ALTITUDE, // bogus target alt
+            mode: ControlMode::Init,
+            valve_vent,
+            valve_dump,
+            target_altitude: DEFAULT_TARGET_ALTITUDE, // bogus target altitude
+            altitude_error: 0.0,                      // bogus altitude error
+            gains_vent,
+            gains_dump,
         };
     }
     fn safe(&mut self) {
         // running but not allowed to actuate valves
-        let previous_state = self.state;
+        let previous_mode = self.mode;
         // unlock the valves if they are locked to force the next step!
         self.valve_vent.unlock();
         self.valve_dump.unlock();
-        // execute state transition
-        self.state = ControlMode::Safe;
-        println!(
-            "CtrlMode transition: {:} --> {:}",
-            previous_state, self.state
-        );
+        // execute mode transition
+        self.mode = ControlMode::Safe;
+        println!("CtrlMode transition: {:} --> {:}", previous_mode, self.mode);
         // lock the vent valve closed
         self.valve_vent.set_pwm(0.0);
         self.valve_vent.lock();
@@ -152,16 +160,13 @@ impl ControlMngr {
     }
     fn abort(&mut self) {
         // dump all ballast and lock balloon valve closed
-        let previous_state = self.state;
+        let previous_mode = self.mode;
         // unlock the valves if they are locked to force the next step!
         self.valve_vent.unlock();
         self.valve_dump.unlock();
-        // execute state transition
-        self.state = ControlMode::Abort;
-        println!(
-            "CtrlMode transition: {:} --> {:}",
-            previous_state, self.state
-        );
+        // execute mode transition
+        self.mode = ControlMode::Abort;
+        println!("CtrlMode transition: {:} --> {:}", previous_mode, self.mode);
         // lock the vent valve closed
         self.valve_vent.set_pwm(0.0);
         self.valve_vent.lock();
@@ -170,71 +175,65 @@ impl ControlMngr {
         self.valve_dump.lock();
     }
     fn idle(&mut self) {
-        // enter state for holding altitude, nothing to do
-        let previous_state = self.state;
-        if previous_state != ControlMode::Safe
-            && previous_state != ControlMode::Abort
-            && previous_state != ControlMode::Init
+        // enter mode for holding altitude, nothing to do
+        let previous_mode = self.mode;
+        if previous_mode != ControlMode::Safe
+            && previous_mode != ControlMode::Abort
+            && previous_mode != ControlMode::Init
         {
             // unlock the valves
             self.valve_vent.unlock();
             self.valve_dump.unlock();
-            self.state = ControlMode::Idle;
-            println!(
-                "CtrlMode transition: {:} --> {:}",
-                previous_state, self.state
-            );
+            self.mode = ControlMode::Idle;
+            println!("CtrlMode transition: {:} --> {:}", previous_mode, self.mode);
         } else {
             println!(
                 "CtrlMode transition ({:} --> {:}) not allowed! Ignoring...",
-                previous_state,
+                previous_mode,
                 ControlMode::Idle
             );
         }
     }
     fn vent(&mut self) {
-        // enter state used for lowering altitude
-        let previous_state = self.state;
-        if previous_state == ControlMode::Idle || previous_state == ControlMode::Dump {
+        // enter mode used for lowering altitude
+        let previous_mode = self.mode;
+        if previous_mode == ControlMode::Idle || previous_mode == ControlMode::Dump {
             // stop dumping -- can only do one at a time!
             self.valve_dump.set_pwm(0.0);
             self.valve_dump.lock();
             // enable venting
             self.valve_vent.unlock();
-            self.state = ControlMode::Vent;
-            println!(
-                "CtrlMode transition: {:} --> {:}",
-                previous_state, self.state
-            );
+            self.mode = ControlMode::Vent;
+            println!("CtrlMode transition: {:} --> {:}", previous_mode, self.mode);
         } else {
             println!(
                 "CtrlMode transition ({:} --> {:}) not allowed! Ignoring...",
-                previous_state,
+                previous_mode,
                 ControlMode::Idle
             );
         }
     }
     fn dump(&mut self) {
-        // enter state used for raising altitude
-        let previous_state = self.state;
-        if previous_state == ControlMode::Idle || previous_state == ControlMode::Vent {
+        // enter mode used for raising altitude
+        let previous_mode = self.mode;
+        if previous_mode == ControlMode::Idle || previous_mode == ControlMode::Vent {
             // stop vemtomg -- can only do one at a time!
             self.valve_vent.set_pwm(0.0);
             self.valve_vent.lock();
             // enable dumping
             self.valve_dump.unlock();
-            self.state = ControlMode::Dump;
-            println!(
-                "CtrlMode transition: {:} --> {:}",
-                previous_state, self.state
-            );
+            self.mode = ControlMode::Dump;
+            println!("CtrlMode transition: {:} --> {:}", previous_mode, self.mode);
         } else {
             println!(
                 "CtrlMode transition ({:} --> {:}) not allowed! Ignoring...",
-                previous_state,
+                previous_mode,
                 ControlMode::Idle
             );
         }
+    }
+    fn get_mode(&self) -> ControlMode {
+        return self.mode;
     }
     fn set_target(&mut self, target_altitude: f32) {
         // set new target altitude
@@ -250,39 +249,32 @@ impl ControlMngr {
             );
         }
     }
+    fn print_pwm(&self) {
+        println!(
+            "balloon pwm {:} ({:}) | ballast pwm {:} ({:})",
+            self.valve_vent.get_pwm(),
+            self.valve_vent.print_lock_status(),
+            self.valve_dump.get_pwm(),
+            self.valve_dump.print_lock_status()
+        );
+    }
     fn start_control(&mut self) {
         // enable altitude control+transition to idle
-        let previous_state = self.state;
-        if previous_state == ControlMode::Safe {
+        let previous_mode = self.mode;
+        if previous_mode == ControlMode::Safe {
             println!("Enabling altitude control system!");
             // unlock the valves if they are locked to force the next step!
             self.valve_vent.unlock();
             self.valve_dump.unlock();
-            // execute state transition
-            self.state = ControlMode::Idle;
-            println!(
-                "CtrlMode transition: {:} --> {:}",
-                previous_state, self.state
-            );
+            // execute mode transition
+            self.mode = ControlMode::Idle;
+            println!("CtrlMode transition: {:} --> {:}", previous_mode, self.mode);
         } else {
             println!(
                 "Not allowed to enable control from {:} mode! Ignoring...",
-                previous_state
+                previous_mode
             );
         }
-    }
-    fn update_pwm(
-        &mut self,
-        gps_altitude: f32, // instantaneous altitude in meters from GPS
-        gps_velocity: f32, // instantaneous vertical velocity in m/s from GPS
-        ballast_mass: f32, // ballast mass remining in kg
-    ) {
-        // execute control algorithm and update vent and dump valve PWM values
-        println!("Tick!");
-        // check abort criteria
-        abort_if_too_low(self, gps_altitude);
-        abort_if_out_of_ballast(self, ballast_mass);
-        
     }
     fn power_on_self_test(&mut self) {
         // turn on and test devices to look for errors
@@ -291,6 +283,48 @@ impl ControlMngr {
                                                     // when POST is complete, transition from idle to safe
         println!("> POST complete!");
         self.safe()
+    }
+    fn update_pwm(
+        &mut self,
+        gps_altitude: f32, // instantaneous altitude in meters from GPS
+        ballast_mass: f32, // ballast mass remining in kg
+    ) {
+        // execute control algorithm and update vent and dump valve PWM values
+        println!("Tick!");
+        // check abort criteria
+        abort_if_too_low(self, gps_altitude);
+        abort_if_out_of_ballast(self, ballast_mass);
+        // update error
+        let last_error = self.altitude_error;
+        let error = self.target_altitude - gps_altitude;
+        // change mode if applicable
+        if self.altitude_error.abs() > CTRL_ERROR_DEADZONE {
+            if self.altitude_error > 0.0 {
+                // lower altitude for error to converge to zero
+                self.vent();
+            } else {
+                // raise altitude for error to converge to zero
+                self.dump();
+            }
+        } else {
+            // if in dead zone, do nothing
+            self.idle();
+        }
+        // run control algorithm with gain switching
+        if self.get_mode() == ControlMode::Vent {
+            let new_pwm = self.eval_pid(error, last_error, self.gains_vent);
+            self.valve_vent.set_pwm(new_pwm.abs());
+        } else if self.get_mode() == ControlMode::Dump {
+            let new_pwm = self.eval_pid(error, last_error, self.gains_dump);
+            self.valve_dump.set_pwm(new_pwm.abs());
+        }
+        // update saved error
+        self.altitude_error = error;
+    }
+    fn eval_pid(&mut self, error: f32, last_error: f32, gains: PIDgains) -> f32 {
+        let control_effort = gains.k_p * error + gains.k_d * (error - last_error);
+        println!("--> altitude error: {:}", error);
+        return control_effort;
     }
 }
 
@@ -319,13 +353,9 @@ fn abort_if_out_of_ballast(ctrl_manager: &mut ControlMngr, ballast_mass: f32) {
     // otherwise carry on
 }
 
-// -- MAIN --
-fn main() {
-    let target_altitude = 25000.0; // meters
-    let balloon_valve = Valve::init(0, String::from("BalloonValve"));
-    let ballast_valve = Valve::init(1, String::from("BallastValve"));
-    let mut ctrl_manager = ControlMngr::init(balloon_valve, ballast_valve);
-    // test state transitions here
+// -- TEST --
+fn test_control_mngr(ctrl_manager: &mut ControlMngr, target_altitude: f32) {
+    // test mode transitions here
     ctrl_manager.idle();
     ctrl_manager.power_on_self_test();
     ctrl_manager.set_target(13000.0);
@@ -333,23 +363,51 @@ fn main() {
     ctrl_manager.set_target(target_altitude);
     ctrl_manager.idle();
     ctrl_manager.start_control();
-    display_pwm(&ctrl_manager);
+    ctrl_manager.print_pwm();
     ctrl_manager.vent();
-    display_pwm(&ctrl_manager);
+    ctrl_manager.print_pwm();
     ctrl_manager.valve_vent.set_pwm(0.5);
-    display_pwm(&ctrl_manager);
+    ctrl_manager.print_pwm();
     ctrl_manager.valve_dump.set_pwm(0.5);
-    display_pwm(&ctrl_manager);
+    ctrl_manager.print_pwm();
     ctrl_manager.dump();
-    display_pwm(&ctrl_manager);
+    ctrl_manager.print_pwm();
     ctrl_manager.valve_dump.set_pwm(0.5);
-    display_pwm(&ctrl_manager);
-    ctrl_manager.update_pwm(14999.9, 0.0, 1.0);
-    display_pwm(&ctrl_manager);
+    ctrl_manager.print_pwm();
+    ctrl_manager.update_pwm(14999.9, 1.0);
+    ctrl_manager.print_pwm();
     ctrl_manager.vent();
-    display_pwm(&ctrl_manager);
+    ctrl_manager.print_pwm();
     ctrl_manager.safe();
     ctrl_manager.start_control();
-    ctrl_manager.update_pwm(15000.1, 0.0, 0.0);
-    display_pwm(&ctrl_manager);
+    ctrl_manager.update_pwm(target_altitude + 500.0, 1.0);
+    ctrl_manager.print_pwm();
+    ctrl_manager.update_pwm(target_altitude, 1.0);
+    ctrl_manager.print_pwm();
+    ctrl_manager.update_pwm(target_altitude - 500.0, 0.5);
+    ctrl_manager.print_pwm();
+    ctrl_manager.update_pwm(target_altitude, 0.0);
+    ctrl_manager.print_pwm();
+}
+
+// -- MAIN --
+fn main() {
+    let target_altitude = 25000.0; // meters
+    let balloon_valve = Valve::init(0, String::from("BalloonValve"));
+    let ballast_valve = Valve::init(1, String::from("BallastValve"));
+    let vent_gains = PIDgains {
+        k_p: 1.0,
+        k_i: 0.0,
+        k_d: 0.1,
+        k_n: 1.0,
+    };
+    let dump_gains = PIDgains {
+        k_p: 1.0,
+        k_i: 0.0,
+        k_d: 0.1,
+        k_n: 1.0,
+    };
+    let mut ctrl_manager = ControlMngr::init(balloon_valve, vent_gains, ballast_valve, dump_gains);
+
+    test_control_mngr(&mut ctrl_manager, target_altitude);
 }
