@@ -83,10 +83,12 @@ impl Valve {
             locked: true,     // whether changes to PWM are allowed
         }
     }
+    
     fn is_locked(&self) -> bool {
         // report if the valve is locked or not
         return self.locked;
     }
+    
     fn set_pwm(&mut self, pwm_value: f32) {
         // set valve open/close PWM
         if self.is_locked() == false {
@@ -95,20 +97,24 @@ impl Valve {
             warn!("Not allowed to set PWM when {:} is locked!", self.name);
         }
     }
+    
     fn get_pwm(&self) -> f32 {
         // report the valve's current PWM setting
         return self.pwm;
     }
+    
     fn lock(&mut self) {
         // lock at the current PWM, no changes allowed
         self.locked = true;
         // println!("Locking {:} [{:}]", &self.name, &self.id);
     }
+    
     fn unlock(&mut self) {
         // unlock, changes to PWM allowed
         self.locked = false;
         // println!("Unlocking {:} [{:}]", &self.name, &self.id);
     }
+    
     fn print_lock_status(&self) -> &str {
         // return a string "locked"/"unlocked" depending on valve's lock status
         if self.is_locked() {
@@ -140,6 +146,7 @@ impl ControlMngr {
             gains_dump,
         };
     }
+    
     fn safe(&mut self) {
         // running but not allowed to actuate valves
         let previous_mode = self.mode;
@@ -156,6 +163,7 @@ impl ControlMngr {
         self.valve_dump.set_pwm(0.0);
         self.valve_dump.lock();
     }
+    
     fn abort(&mut self) {
         // dump all ballast and lock balloon valve closed
         let previous_mode = self.mode;
@@ -172,6 +180,7 @@ impl ControlMngr {
         self.valve_dump.set_pwm(1.0);
         self.valve_dump.lock();
     }
+    
     fn idle(&mut self) {
         // enter mode for holding altitude, nothing to do
         let previous_mode = self.mode;
@@ -192,6 +201,7 @@ impl ControlMngr {
             );
         }
     }
+    
     fn vent(&mut self) {
         // enter mode used for lowering altitude
         let previous_mode = self.mode;
@@ -211,6 +221,7 @@ impl ControlMngr {
             );
         }
     }
+    
     fn dump(&mut self) {
         // enter mode used for raising altitude
         let previous_mode = self.mode;
@@ -230,9 +241,11 @@ impl ControlMngr {
             );
         }
     }
+    
     fn get_mode(&self) -> ControlMode {
         return self.mode;
     }
+    
     fn set_target(&mut self, target_altitude: f32) {
         // set new target altitude
         // Set a new target altitude to converge toward (in meters)
@@ -247,6 +260,7 @@ impl ControlMngr {
             );
         }
     }
+    
     fn print_pwm(&self) {
         debug!(
             "balloon pwm {:} ({:}) | ballast pwm {:} ({:})",
@@ -256,6 +270,7 @@ impl ControlMngr {
             self.valve_dump.print_lock_status()
         );
     }
+    
     fn start_control(&mut self) {
         // enable altitude control+transition to idle
         let previous_mode = self.mode;
@@ -274,6 +289,7 @@ impl ControlMngr {
             );
         }
     }
+    
     fn power_on_self_test(&mut self) {
         // turn on and test devices to look for errors
         info!("Starting Power-On Self Test...");
@@ -283,6 +299,7 @@ impl ControlMngr {
         // when POST is complete, transition from idle to safe
         self.safe()
     }
+    
     fn update_pwm(
         &mut self,
         gps_altitude: f32, // instantaneous altitude in meters from GPS
@@ -320,6 +337,7 @@ impl ControlMngr {
         // update saved error
         self.altitude_error = error;
     }
+    
     fn eval_pid(&mut self, error: f32, last_error: f32, gains: PIDgains) -> f32 {
         let control_effort = gains.k_p * error + gains.k_d * (error - last_error);
         debug!("--> altitude error: {:}", error);
