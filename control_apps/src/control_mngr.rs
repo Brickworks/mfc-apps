@@ -12,7 +12,7 @@ const CTRL_ERROR_DEADZONE: f32 = 100.0; // magnitude of margin to allow
 
 // -- DATA STRUCTURES --
 #[derive(Copy, Clone, PartialEq)]
-enum ControlMode {
+pub enum ControlMode {
     // State machine control mode
     Init,  // startup, POST, FSW initialization, HW initialization
     Safe,  // not allowed to actuate valves
