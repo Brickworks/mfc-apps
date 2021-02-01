@@ -11,11 +11,11 @@ use crate::pid::PIDcontroller;
 
 pub struct Valve {
     // Altitude control mass flow control valve
-    id: u8,       // integer identifier for this valve
-    name: String, // name for this valve - be descriptive but concise!
-    pwm: f32,     // instantaneous PWM setting for valve open/close duty cycle
-    locked: bool, // whether valve is allowed to change PWM
-    pub controller: PIDcontroller // PID used to determine PWM
+    id: u8,                        // integer identifier for this valve
+    name: String,                  // name for this valve - be descriptive but concise!
+    pwm: f32,                      // instantaneous PWM setting [0, 1]
+    locked: bool,                  // whether valve is allowed to change PWM
+    pub controller: PIDcontroller, // PID used to determine PWM
 }
 
 impl fmt::Display for Valve {
@@ -48,16 +48,18 @@ impl Valve {
         } else {
             warn!("Not allowed to set PWM when {:} is locked!", self.name);
         }
+        debug!("{:} PWM set to {:}", self, self.get_pwm());
     }
 
-    pub fn update_pwm(&mut self, error: f32, last_error: f32) {
+    pub fn update_pwm(&mut self, error: f32, last_error: f32, elapsed_time: f32) {
         // execute control algorithm to get control effort
-        let control_effort = self.controller.get_control_effort(error, last_error);
-        debug!("--> control effort: {:}", control_effort);
+        let control_effort = self
+            .controller
+            .get_control_effort(error, last_error, elapsed_time);
         // map control effort to PWM values if applicable
-        let new_pwm = control_effort;
+        let new_pwm = clamp(control_effort.abs(), 0.0, 1.0);
         // then set PWM
-        self.set_pwm(new_pwm.abs());
+        self.set_pwm(new_pwm);
     }
 
     pub fn get_pwm(&self) -> f32 {
@@ -68,13 +70,13 @@ impl Valve {
     pub fn lock(&mut self) {
         // lock at the current PWM, no changes allowed
         self.locked = true;
-        // println!("Locking {:} [{:}]", &self.name, &self.id);
+        debug!("{:} {:}", self, self.print_lock_status());
     }
 
     pub fn unlock(&mut self) {
         // unlock, changes to PWM allowed
         self.locked = false;
-        // println!("Unlocking {:} [{:}]", &self.name, &self.id);
+        debug!("{:} {:}", self, self.print_lock_status());
     }
 
     pub fn print_lock_status(&self) -> &str {
@@ -85,4 +87,12 @@ impl Valve {
             return "unlocked";
         }
     }
+}
+
+pub fn clamp(input:f32, min: f32, max: f32) -> f32 {
+    assert!(max >= min);
+    let mut x = input;
+    if x < min { x = min; debug!("clamping {:} to {:}", input, x); }
+    if x > max { x = max; debug!("clamping {:} to {:}", input, x); }
+    x
 }

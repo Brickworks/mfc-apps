@@ -7,20 +7,17 @@ mod pid;
 mod valve;
 
 fn test_control_mngr(ctrl_manager: &mut control_mngr::ControlMngr, target_altitude: f32) {
+    let dt = 0.01; // seconds between datapoints
+
     // test mode transitions here
     ctrl_manager.power_on_self_test();
     ctrl_manager.set_target(target_altitude);
     ctrl_manager.start_control();
-    ctrl_manager.update(target_altitude - 500.0, 1.0);
-    ctrl_manager.print_pwm();
-    ctrl_manager.update(target_altitude, 1.0);
-    ctrl_manager.print_pwm();
-    ctrl_manager.update(target_altitude + 500.0, 0.5);
-    ctrl_manager.print_pwm();
-    // ctrl_manager.update(target_altitude, 0.0);
-    // ctrl_manager.print_pwm();
-    // ctrl_manager.update(14999.9, 1.0);
-    // ctrl_manager.print_pwm();
+    ctrl_manager.update(target_altitude - 500.0, 1.0, dt);
+    ctrl_manager.update(target_altitude, 0.8, dt);
+    ctrl_manager.update(target_altitude + 100.0, 0.5, dt);
+    ctrl_manager.update(target_altitude, 0.0, dt);
+    ctrl_manager.update(14999.9, 1.0, dt);
 }
 
 fn main() {

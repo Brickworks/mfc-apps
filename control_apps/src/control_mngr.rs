@@ -49,10 +49,7 @@ impl fmt::Display for ControlMode {
 }
 
 impl ControlMngr {
-    pub fn init(
-        valve_vent: Valve,
-        valve_dump: Valve,
-    ) -> Self {
+    pub fn init(valve_vent: Valve, valve_dump: Valve) -> Self {
         info!("Initializing Control Manager...");
         info!("\tvent valve {:}", valve_vent);
         info!("\tdump valve {:}", valve_dump);
@@ -68,6 +65,7 @@ impl ControlMngr {
 
     fn safe(&mut self) {
         // running but not allowed to actuate valves
+        debug!("Attempting transition to {:}", ControlMode::Safe);
         let previous_mode = self.mode;
         // unlock the valves if they are locked to force the next step!
         self.valve_vent.unlock();
@@ -85,6 +83,7 @@ impl ControlMngr {
 
     fn idle(&mut self) {
         // enter mode for holding altitude, nothing to do
+        debug!("Attempting transition to {:}", ControlMode::Idle);
         let previous_mode = self.mode;
         if previous_mode != ControlMode::Safe
             && previous_mode != ControlMode::Abort
@@ -106,6 +105,7 @@ impl ControlMngr {
 
     fn vent(&mut self) {
         // enter mode used for lowering altitude
+        debug!("Attempting transition to {:}", ControlMode::Vent);
         let previous_mode = self.mode;
         if previous_mode == ControlMode::Idle || previous_mode == ControlMode::Dump {
             // stop dumping -- can only do one at a time!
@@ -126,6 +126,7 @@ impl ControlMngr {
 
     fn dump(&mut self) {
         // enter mode used for raising altitude
+        debug!("Attempting transition to {:}", ControlMode::Dump);
         let previous_mode = self.mode;
         if previous_mode == ControlMode::Idle || previous_mode == ControlMode::Vent {
             // stop vemtomg -- can only do one at a time!
@@ -146,6 +147,7 @@ impl ControlMngr {
 
     pub fn abort(&mut self) {
         // dump all ballast and lock balloon valve closed
+        debug!("Attempting transition to {:}", ControlMode::Abort);
         let previous_mode = self.mode;
         // unlock the valves if they are locked to force the next step!
         self.valve_vent.unlock();
@@ -165,23 +167,13 @@ impl ControlMngr {
         return self.mode;
     }
 
-    pub fn print_pwm(&self) {
-        debug!(
-            "balloon pwm {:} ({:}) | ballast pwm {:} ({:})",
-            self.valve_vent.get_pwm(),
-            self.valve_vent.print_lock_status(),
-            self.valve_dump.get_pwm(),
-            self.valve_dump.print_lock_status()
-        );
-    }
-
     pub fn set_target(&mut self, target_altitude: f32) {
         // set new target altitude
         // Set a new target altitude to converge toward (in meters)
         if target_altitude > CTRL_ALTITUDE_FLOOR {
             // target must be above the minimum allowed altitude
             self.target_altitude = target_altitude;
-            info!("New target altitude: {:}", self.target_altitude);
+            info!("New target altitude: {:}m", self.target_altitude);
         } else {
             warn!(
                 "Not allowed to set target altitude below {:}! Ignoring...",
@@ -223,59 +215,77 @@ impl ControlMngr {
         &mut self,
         gps_altitude: f32, // instantaneous altitude in meters from GPS
         ballast_mass: f32, // ballast mass remining in kg
+        delta_t: f32,      // time since last update
     ) {
         // execute control algorithm and update vent and dump valve PWM values
-        debug!("Tick!");
 
         // check abort criteria
-        self.abort_if_too_low(gps_altitude);
-        self.abort_if_out_of_ballast(ballast_mass);
+        if !self.abort_if_too_low(gps_altitude) && !self.abort_if_out_of_ballast(ballast_mass) {
+            // update error
+            let last_error = self.altitude_error;
+            let error = gps_altitude - self.target_altitude;
 
-        // update error
-        let last_error = self.altitude_error;
-        let error = self.target_altitude - gps_altitude;
-        debug!("error {:} | last error: {:}", error, last_error);
-
-        // change mode if applicable, run control with gain switching
-        if error.abs() >= CTRL_ERROR_DEADZONE {
-            if error > 0.0 {
-                // lower altitude for error to converge to zero
-                debug!("Altitude too high, vent gas");
-                self.vent();
-                self.valve_vent.update_pwm(error, last_error);
+            // change mode if applicable, run control with gain switching
+            if error.abs() >= CTRL_ERROR_DEADZONE {
+                debug!(
+                    "Altitude error {:}m greater than deadzone threshold {:}m",
+                    error, CTRL_ERROR_DEADZONE
+                );
+                if error > 0.0 {
+                    // lower altitude for error to converge to zero
+                    debug!(
+                        "Altitude {:}m is higher than target {:}m, vent gas",
+                        gps_altitude, self.target_altitude
+                    );
+                    self.vent();
+                    self.valve_vent.update_pwm(error, last_error, delta_t);
+                } else {
+                    // raise altitude for error to converge to zero
+                    debug!(
+                        "Altitude {:}m is lower than target {:}m, drop ballast",
+                        gps_altitude, self.target_altitude
+                    );
+                    self.dump();
+                    self.valve_dump.update_pwm(error, last_error, delta_t);
+                }
             } else {
-                // raise altitude for error to converge to zero
-                debug!("Altitude too low, drop ballast");
-                self.dump();
-                self.valve_dump.update_pwm(error, last_error);
+                // if in dead zone, do nothing
+                debug!(
+                    "Altitude error {:}m less than deadzone threshold {:}m, do nothing",
+                    error, CTRL_ERROR_DEADZONE
+                );
+                self.idle();
             }
-        } else {
-            // if in dead zone, do nothing
-            debug!("Altitude in deadzone, do nothing");
-            self.idle();
-        }
 
-        // update saved error
-        self.altitude_error = error;
+            // update saved error
+            self.altitude_error = error;
+        }
+        // otherwise don't update
     }
 
-    fn abort_if_too_low(&mut self, altitude: f32) {
+    fn abort_if_too_low(&mut self, altitude: f32) -> bool {
         if altitude <= CTRL_ALTITUDE_FLOOR {
             // abort if the altitude is at or below the allowable limit
             warn!(
                 "Altitude is too low! Current Alt: {:}m / Min allowed: {:}m",
                 altitude, CTRL_ALTITUDE_FLOOR
             );
-            self.abort()
+            self.abort();
+            return true;
+        } else {
+            // otherwise carry on
+            return false;
         }
-        // otherwise carry on
     }
-    fn abort_if_out_of_ballast(&mut self, ballast_mass: f32) {
+    fn abort_if_out_of_ballast(&mut self, ballast_mass: f32) -> bool {
         if ballast_mass <= 0.0 {
             // abort if there is no ballast left
             warn!("Not enough ballast mass! Ballast mass: {:}kg", ballast_mass);
-            self.abort()
+            self.abort();
+            return true;
+        } else {
+            // otherwise carry on
+            return false;
         }
-        // otherwise carry on
     }
 }

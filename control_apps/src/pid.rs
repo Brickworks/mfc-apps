@@ -82,7 +82,11 @@ impl PIDcontroller {
         return self.k_n;
     }
 
-    pub fn get_control_effort(&mut self, error: f32, last_error: f32) -> f32 {
-        return self.k_p * error + self.k_d * (error - last_error);
+    pub fn get_control_effort(&mut self, error: f32, last_error: f32, elapsed_time: f32) -> f32 {
+        let control_effort = self.get_kp() * error
+            + self.get_ki() * error * elapsed_time
+            + self.get_kd() * (error - last_error) / elapsed_time;
+        debug!("Control effort: {:}", control_effort);
+        return control_effort
     }
 }
