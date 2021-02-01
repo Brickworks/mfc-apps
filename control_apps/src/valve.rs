@@ -94,10 +94,16 @@ impl Valve {
     }
 }
 
-pub fn clamp(input:f32, min: f32, max: f32) -> f32 {
+pub fn clamp(input: f32, min: f32, max: f32) -> f32 {
     assert!(max >= min);
     let mut x = input;
-    if x < min { x = min; debug!("clamping {:} to {:}", input, x); }
-    if x > max { x = max; debug!("clamping {:} to {:}", input, x); }
+    if x < min {
+        x = min;
+        debug!("clamping {:} to {:}", input, x);
+    }
+    if x > max {
+        x = max;
+        debug!("clamping {:} to {:}", input, x);
+    }
     x
 }

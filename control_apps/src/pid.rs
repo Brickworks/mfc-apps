@@ -87,6 +87,6 @@ impl PIDcontroller {
             + self.get_ki() * error * elapsed_time
             + self.get_kd() * (error - last_error) / elapsed_time;
         debug!("Control effort: {:}", control_effort);
-        return control_effort
+        return control_effort;
     }
 }

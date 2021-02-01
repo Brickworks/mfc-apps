@@ -7,7 +7,6 @@ mod pid;
 mod valve;
 
 fn test_control_mngr() {
-    
     // set bogus values for testing and debugging
     let dt = 0.01; // seconds between datapoints
     let target_altitude = 25000.0; // meters
