@@ -11,6 +11,7 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+<<<<<<< HEAD
   build-support-apps:
     runs-on: ubuntu-latest
     defaults:
@@ -27,6 +28,12 @@ jobs:
     defaults:
       run:
         working-directory: control_apps
+=======
+  build:
+
+    runs-on: ubuntu-latest
+
+>>>>>>> master
     steps:
     - uses: actions/checkout@v2
     - name: Build
