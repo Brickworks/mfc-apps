@@ -1,9 +1,13 @@
 // ----------------------------------------------------------------------------
 // Valve
-//
+// -----
+// Objects used to define and constrain interaction between the ControlMngr
+// and the valves that regulate control reaction mass.
 // ----------------------------------------------------------------------------
 
 use std::fmt;
+
+use crate::pid::PIDcontroller;
 
 pub struct Valve {
     // Altitude control mass flow control valve
@@ -11,6 +15,7 @@ pub struct Valve {
     name: String, // name for this valve - be descriptive but concise!
     pwm: f32,     // instantaneous PWM setting for valve open/close duty cycle
     locked: bool, // whether valve is allowed to change PWM
+    pub controller: PIDcontroller // PID used to determine PWM
 }
 
 impl fmt::Display for Valve {
@@ -20,13 +25,14 @@ impl fmt::Display for Valve {
 }
 
 impl Valve {
-    pub fn init(valve_id: u8, valve_name: String) -> Self {
+    pub fn init(valve_id: u8, valve_name: String, controller: PIDcontroller) -> Self {
         info!("Initializing valve: {:} (id: {:})", valve_name, valve_id);
         Valve {
             id: valve_id,     // integer device identifier
             name: valve_name, // device nickname
             pwm: 0.0,         // PWM setting for open/close duty cycle
             locked: true,     // whether changes to PWM are allowed
+            controller,       // controller used to update PWM
         }
     }
 
@@ -42,6 +48,16 @@ impl Valve {
         } else {
             warn!("Not allowed to set PWM when {:} is locked!", self.name);
         }
+    }
+
+    pub fn update_pwm(&mut self, error: f32, last_error: f32) {
+        // execute control algorithm to get control effort
+        let control_effort = self.controller.get_control_effort(error, last_error);
+        debug!("--> control effort: {:}", control_effort);
+        // map control effort to PWM values if applicable
+        let new_pwm = control_effort;
+        // then set PWM
+        self.set_pwm(new_pwm.abs());
     }
 
     pub fn get_pwm(&self) -> f32 {
