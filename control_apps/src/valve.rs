@@ -36,11 +36,6 @@ impl Valve {
         }
     }
 
-    pub fn is_locked(&self) -> bool {
-        // report if the valve is locked or not
-        return self.locked;
-    }
-
     pub fn set_pwm(&mut self, pwm_value: f32) {
         // set valve open/close PWM
         if self.is_locked() == false {
@@ -49,6 +44,16 @@ impl Valve {
             warn!("Not allowed to set PWM when {:} is locked!", self.name);
         }
         debug!("{:} PWM set to {:}", self, self.get_pwm());
+    }
+
+    pub fn get_pwm(&self) -> f32 {
+        // report the valve's current PWM setting
+        return self.pwm;
+    }
+
+    pub fn set_controller(&mut self, controller: PIDcontroller) {
+        // set a new controller used for updating PWM
+        self.controller = controller;
     }
 
     pub fn update_pwm(&mut self, error: f32, last_error: f32, elapsed_time: f32) {
@@ -62,11 +67,6 @@ impl Valve {
         self.set_pwm(new_pwm);
     }
 
-    pub fn get_pwm(&self) -> f32 {
-        // report the valve's current PWM setting
-        return self.pwm;
-    }
-
     pub fn lock(&mut self) {
         // lock at the current PWM, no changes allowed
         self.locked = true;
@@ -77,6 +77,11 @@ impl Valve {
         // unlock, changes to PWM allowed
         self.locked = false;
         debug!("{:} {:}", self, self.print_lock_status());
+    }
+
+    pub fn is_locked(&self) -> bool {
+        // report if the valve is locked or not
+        return self.locked;
     }
 
     pub fn print_lock_status(&self) -> &str {
