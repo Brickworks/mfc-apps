@@ -10,10 +10,27 @@ const BOLTZMANN_CONSTANT: f32 = 1.38e-23_f32; // [J/K]
 const AVOGADRO_CONSTANT: f32 = 6.022e+23_f32; // [1/mol]
 const R: f32 = BOLTZMANN_CONSTANT * AVOGADRO_CONSTANT; //[J/K-mol] Ideal gas constant
 
+
+#[derive(Copy, Clone)]
+pub enum GasSpecies {
+    // Species of gas with a known molar mass (kg/mol)
+    Air,
+    He, Helium,
+    H2, Hydrogen,
+    N2, Nitrogen,
+    O2, Oxygen,
+    Ar, Argon,
+    CO2, CarbonDioxide,
+    Ne, Neon,
+    Kr, Krypton,
+    Xe, Xenon,
+    CH4, Methane,
+}
+
 #[derive(Copy, Clone)]
 pub struct GasVolume {
     // A finite amount of a particular gas
-    species: String,  // type of gas
+    species: GasSpecies,  // type of gas
     mass: f32,        // [kg] amount of gas in the volume
     temperature: f32, // [K] temperature
     pressure: f32,    // [Pa] pressure
@@ -22,7 +39,7 @@ pub struct GasVolume {
 }
 
 impl GasVolume {
-    pub fn new(species: &str, mass: f32) -> Self {
+    pub fn new(species: GasSpecies, mass: f32) -> Self {
         // Create a new gas volume as a finite amount of mass (kg) of a
         // particular species of gas. Gas is initialized at standard
         // temperature and pressure.
@@ -40,7 +57,7 @@ impl GasVolume {
         // Xe  Xenon
         // CH4 Methane
         GasVolume {
-            species: String::from(species),
+            species,
             mass,
             temperature: STANDARD_TEMPERATURE,
             pressure: STANDARD_PRESSURE,
@@ -114,34 +131,20 @@ pub fn density(temperature: f32, pressure: f32, molar_mass: f32) -> f32 {
     return (molar_mass * pressure) / (R * temperature); // [kg/m^3]
 }
 
-pub fn molar_mass(species: &str) -> f32 {
+pub fn molar_mass(species: GasSpecies) -> f32 {
     // Get the molecular weight (kg/mol) of a dry gas at sea level.
     // Source: US Standard Atmosphere, 1976
-    // --- -------
-    // Key Species
-    // --- -------
-    // He  Helium
-    // H2  Hydrogen
-    // N2  Nitrogen
-    // O2  Oxygen
-    // Ar  Argon
-    // CO2 Carbon Dioxide
-    // Ne  Neon
-    // Kr  Krypton
-    // Xe  Xenon
-    // CH4 Methane
     match species {
-        "air" => 0.02897,
-        "he" | "hydrogen" => 0.0040026,
-        "h2" | "helium" => 0.00201594,
-        "n2" | "nitrogen" => 0.0280134,
-        "o2" | "oxygen" => 0.0319988,
-        "ar" | "argon" => 0.039948,
-        "co2" | "carbon dioxide" => 0.04400995,
-        "ne" | "neon" => 0.020183,
-        "kr" | "krypton" => 0.08380,
-        "xe" | "xenon" => 0.13130,
-        "ch4" | "methane" => 0.01604303,
-        _ => 0.0,
+        GasSpecies::Air => 0.02897,
+        GasSpecies::He | GasSpecies::Helium => 0.0040026,
+        GasSpecies::H2 | GasSpecies::Hydrogen => 0.00201594,
+        GasSpecies::N2 | GasSpecies::Nitrogen => 0.0280134,
+        GasSpecies::O2 | GasSpecies::Oxygen => 0.0319988,
+        GasSpecies::Ar | GasSpecies::Argon => 0.039948,
+        GasSpecies::CO2 | GasSpecies::CarbonDioxide => 0.04400995,
+        GasSpecies::Ne | GasSpecies::Neon => 0.020183,
+        GasSpecies::Kr | GasSpecies::Krypton => 0.08380,
+        GasSpecies::Xe | GasSpecies::Xenon => 0.13130,
+        GasSpecies::CH4 | GasSpecies::Methane => 0.01604303,
     }
 }

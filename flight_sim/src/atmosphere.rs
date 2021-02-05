@@ -42,5 +42,9 @@ pub fn pressure(altitude: f32) -> f32 {
 pub fn density(altitude: f32) -> f32 {
     // Density (kg/m^3) of the atmosphere at a given altitude (m).
     // Only valid for altitudes below 85,000 meters.
-    return gas::density(temperature(altitude), pressure(altitude), gas::molar_mass(String::from_str("air")))
+    return gas::density(
+        temperature(altitude),
+        pressure(altitude),
+        gas::molar_mass(String::from_str("air"))
+    )
 }
