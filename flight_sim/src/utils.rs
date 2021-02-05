@@ -13,7 +13,7 @@ const EARTH_RADIUS_M: f32 = 6371007.2; // [m] mean radius of Earth
 
 pub fn g(altitude: f32) -> f32 {
     // Acceleration (m/s^2) from gravity at an altitude (m) above mean sea level.
-    return -G_0 * (R_E / (R_E + altitude)) // [m/s^2]
+    return -STANDARD_G * (EARTH_RADIUS_M / (EARTH_RADIUS_M + altitude)) // [m/s^2]
 }
 
 pub fn temperature_c2k(temp_celsius: f32) -> f32 {
@@ -28,5 +28,5 @@ pub fn temperature_k2c(temp_kelvin: f32) -> f32 {
 
 pub fn sphere_area_from_volume(volume: f32) -> f32{
     // Get the projected area (m^2) of a sphere with a given volume (m^3)
-    return libm::pow(libm::pow(volume / (PI * (4.0/3.0)), 1.0/3.0), 2) * PI
+    return libm::powf(libm::powf(volume / (PI * (4.0/3.0)), 1.0/3.0), 2.0) * PI
 }
