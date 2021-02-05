@@ -44,27 +44,27 @@ pub enum GasSpecies {
 impl fmt::Display for GasSpecies {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            GasSpecies::Air  => write!(f, "Air"),
-            GasSpecies::He  => write!(f, "Helium"),
-            GasSpecies::Helium  => write!(f, "Helium"),
-            GasSpecies::H2  => write!(f, "Hydrogen"),
-            GasSpecies::Hydrogen  => write!(f, "Hydrogen"),
-            GasSpecies::N2  => write!(f, "Nitrogen"),
-            GasSpecies::Nitrogen  => write!(f, "Nitrogen"),
-            GasSpecies::O2  => write!(f, "Oxygen"),
-            GasSpecies::Oxygen  => write!(f, "Oxygen"),
-            GasSpecies::Ar  => write!(f, "Argon"),
-            GasSpecies::Argon  => write!(f, "Argon"),
-            GasSpecies::CO2  => write!(f, "Carbon Dioxide"),
-            GasSpecies::CarbonDioxide  => write!(f, "Carbon Dioxide"),
-            GasSpecies::Ne  => write!(f, "Neon"),
-            GasSpecies::Neon  => write!(f, "Neon"),
-            GasSpecies::Kr  => write!(f, "Krypton"),
-            GasSpecies::Krypton  => write!(f, "Krypton"),
-            GasSpecies::Xe  => write!(f, "Xenon"),
-            GasSpecies::Xenon  => write!(f, "Xenon"),
-            GasSpecies::CH4  => write!(f, "Methane"),
-            GasSpecies::Methane  => write!(f, "Methane"),
+            GasSpecies::Air => write!(f, "Air"),
+            GasSpecies::He => write!(f, "Helium"),
+            GasSpecies::Helium => write!(f, "Helium"),
+            GasSpecies::H2 => write!(f, "Hydrogen"),
+            GasSpecies::Hydrogen => write!(f, "Hydrogen"),
+            GasSpecies::N2 => write!(f, "Nitrogen"),
+            GasSpecies::Nitrogen => write!(f, "Nitrogen"),
+            GasSpecies::O2 => write!(f, "Oxygen"),
+            GasSpecies::Oxygen => write!(f, "Oxygen"),
+            GasSpecies::Ar => write!(f, "Argon"),
+            GasSpecies::Argon => write!(f, "Argon"),
+            GasSpecies::CO2 => write!(f, "Carbon Dioxide"),
+            GasSpecies::CarbonDioxide => write!(f, "Carbon Dioxide"),
+            GasSpecies::Ne => write!(f, "Neon"),
+            GasSpecies::Neon => write!(f, "Neon"),
+            GasSpecies::Kr => write!(f, "Krypton"),
+            GasSpecies::Krypton => write!(f, "Krypton"),
+            GasSpecies::Xe => write!(f, "Xenon"),
+            GasSpecies::Xenon => write!(f, "Xenon"),
+            GasSpecies::CH4 => write!(f, "Methane"),
+            GasSpecies::Methane => write!(f, "Methane"),
         }
     }
 }
@@ -82,12 +82,10 @@ pub struct GasVolume {
 
 impl fmt::Display for GasVolume {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:}: {:} kg | {:} K | {:} Pa | {:} m^3",
-            self.species,
-            self.mass,
-            self.temperature,
-            self.pressure,
-            self.volume,
+        write!(
+            f,
+            "{:}: {:} kg | {:} K | {:} Pa | {:} m^3",
+            self.species, self.mass, self.temperature, self.pressure, self.volume,
         )
     }
 }
@@ -172,12 +170,7 @@ impl GasVolume {
     }
 
     fn update_volume(&mut self) {
-        self.volume = volume(
-            self.temperature,
-            self.pressure,
-            self.mass,
-            self.molar_mass
-        );
+        self.volume = volume(self.temperature, self.pressure, self.mass, self.molar_mass);
     }
 
     pub fn density(self) -> f32 {

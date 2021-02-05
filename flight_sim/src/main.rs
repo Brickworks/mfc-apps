@@ -3,9 +3,9 @@ extern crate pretty_env_logger;
 extern crate log;
 extern crate libm;
 
-mod utils;
-mod gas;
 mod atmosphere;
+mod gas;
+mod utils;
 
 fn main() {
     pretty_env_logger::init(); // initialize pretty print
@@ -18,20 +18,30 @@ fn main() {
     let altitude = 10.0; // [m]
     let ambient_temp = atmosphere::temperature(altitude);
     let ambient_pres = atmosphere::pressure(altitude);
-    info!("Ambient conditions at {:} m: {:} K | {:} Pa", altitude, ambient_temp, ambient_pres);
-    
+    info!(
+        "Ambient conditions at {:} m: {:} K | {:} Pa",
+        altitude, ambient_temp, ambient_pres
+    );
     let altitude = 10000.0; // [m]
     let ambient_temp = atmosphere::temperature(altitude);
     let ambient_pres = atmosphere::pressure(altitude);
-    info!("Ambient conditions at {:} m: {:} K | {:} Pa", altitude, ambient_temp, ambient_pres);
-    
+    info!(
+        "Ambient conditions at {:} m: {:} K | {:} Pa",
+        altitude, ambient_temp, ambient_pres
+    );
     let altitude = 50000.0; // [m]
     let ambient_temp = atmosphere::temperature(altitude);
     let ambient_pres = atmosphere::pressure(altitude);
-    info!("Ambient conditions at {:} m: {:} K | {:} Pa", altitude, ambient_temp, ambient_pres);
+    info!(
+        "Ambient conditions at {:} m: {:} K | {:} Pa",
+        altitude, ambient_temp, ambient_pres
+    );
 
     let altitude = 100000.0; // [m]
     let ambient_temp = atmosphere::temperature(altitude);
     let ambient_pres = atmosphere::pressure(altitude);
-    info!("Ambient conditions at {:} m: {:} K | {:} Pa", altitude, ambient_temp, ambient_pres);
+    info!(
+        "Ambient conditions at {:} m: {:} K | {:} Pa",
+        altitude, ambient_temp, ambient_pres
+    );
 }
