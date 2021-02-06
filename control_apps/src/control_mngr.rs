@@ -60,7 +60,7 @@ impl ControlMngr {
             valve_dump,
             target_altitude: DEFAULT_TARGET_ALTITUDE, // bogus target altitude
             altitude_error: 0.0,                      // bogus altitude error
-        };
+        }
     }
 
     fn safe(&mut self) {
@@ -271,10 +271,10 @@ impl ControlMngr {
                 altitude, CTRL_ALTITUDE_FLOOR
             );
             self.abort();
-            return true;
+            return true
         } else {
             // otherwise carry on
-            return false;
+            return false
         }
     }
 
@@ -283,10 +283,10 @@ impl ControlMngr {
             // abort if there is no ballast left
             warn!("Not enough ballast mass! Ballast mass: {:}kg", ballast_mass);
             self.abort();
-            return true;
+            return true
         } else {
             // otherwise carry on
-            return false;
+            return false
         }
     }
 }
