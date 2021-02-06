@@ -36,6 +36,10 @@ impl PIDcontroller {
     }
 
     pub fn set_all_gains(&mut self, k_p: f32, k_i: f32, k_d: f32, k_n: f32) {
+        // k_p --> proportional error gain
+        // k_i --> integral error gain
+        // k_d --> derivative error gain
+        // k_n --> derivative error filter coefficient
         self.k_p = k_p;
         self.k_i = k_i;
         self.k_d = k_d;

@@ -277,6 +277,7 @@ impl ControlMngr {
             return false;
         }
     }
+
     fn abort_if_out_of_ballast(&mut self, ballast_mass: f32) -> bool {
         if ballast_mass <= 0.0 {
             // abort if there is no ballast left
