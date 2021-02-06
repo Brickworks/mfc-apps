@@ -25,7 +25,7 @@ impl fmt::Display for Valve {
 }
 
 impl Valve {
-    pub fn init(valve_id: u8, valve_name: String, controller: PIDcontroller) -> Self {
+    pub fn new(valve_id: u8, valve_name: String, controller: PIDcontroller) -> Self {
         info!("Initializing valve: {:} (id: {:})", valve_name, valve_id);
         Valve {
             id: valve_id,     // integer device identifier
@@ -48,12 +48,12 @@ impl Valve {
 
     pub fn get_pwm(&self) -> f32 {
         // report the valve's current PWM setting
-        return self.pwm;
+        return self.pwm
     }
 
     pub fn set_controller(&mut self, controller: PIDcontroller) {
         // set a new controller used for updating PWM
-        self.controller = controller;
+        self.controller = controller
     }
 
     pub fn update_pwm(&mut self, error: f32, last_error: f32, elapsed_time: f32) {
@@ -81,15 +81,15 @@ impl Valve {
 
     pub fn is_locked(&self) -> bool {
         // report if the valve is locked or not
-        return self.locked;
+        return self.locked
     }
 
     pub fn print_lock_status(&self) -> &str {
         // return a string "locked"/"unlocked" depending on valve's lock status
         if self.is_locked() {
-            return "locked";
+            return "locked"
         } else {
-            return "unlocked";
+            return "unlocked"
         }
     }
 }

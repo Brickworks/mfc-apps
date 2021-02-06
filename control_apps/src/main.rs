@@ -10,11 +10,11 @@ fn test_control_mngr() {
     // set bogus values for testing and debugging
     let dt = 0.01; // seconds between datapoints
     let target_altitude = 25000.0; // meters
-    let vent_controller = pid::PIDcontroller::init(0.00001, 0.00001, 0.00000, 1.00000);
-    let dump_controller = pid::PIDcontroller::init(0.00001, 0.00001, 0.00000, 1.00000);
-    let balloon_valve = valve::Valve::init(0, String::from("BalloonValve"), vent_controller);
-    let ballast_valve = valve::Valve::init(1, String::from("BallastValve"), dump_controller);
-    let mut ctrl_manager = control_mngr::ControlMngr::init(balloon_valve, ballast_valve);
+    let vent_controller = pid::PIDcontroller::new(0.00001, 0.00001, 0.00000, 1.00000);
+    let dump_controller = pid::PIDcontroller::new(0.00001, 0.00001, 0.00000, 1.00000);
+    let balloon_valve = valve::Valve::new(0, String::from("BalloonValve"), vent_controller);
+    let ballast_valve = valve::Valve::new(1, String::from("BallastValve"), dump_controller);
+    let mut ctrl_manager = control_mngr::ControlMngr::new(balloon_valve, ballast_valve);
 
     // test mode transitions and other functions for debugging
     ctrl_manager.power_on_self_test();
