@@ -25,7 +25,7 @@ impl fmt::Display for Valve {
 }
 
 impl Valve {
-    pub fn init(valve_id: u8, valve_name: String, controller: PIDcontroller) -> Self {
+    pub fn new(valve_id: u8, valve_name: String, controller: PIDcontroller) -> Self {
         info!("Initializing valve: {:} (id: {:})", valve_name, valve_id);
         Valve {
             id: valve_id,     // integer device identifier

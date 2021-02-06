@@ -49,7 +49,7 @@ impl fmt::Display for ControlMode {
 }
 
 impl ControlMngr {
-    pub fn init(valve_vent: Valve, valve_dump: Valve) -> Self {
+    pub fn new(valve_vent: Valve, valve_dump: Valve) -> Self {
         info!("Initializing Control Manager...");
         info!("\tvent valve {:}", valve_vent);
         info!("\tdump valve {:}", valve_dump);

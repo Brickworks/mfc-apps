@@ -26,7 +26,7 @@ impl fmt::Display for PIDcontroller {
 }
 
 impl PIDcontroller {
-    pub fn init(k_p: f32, k_i: f32, k_d: f32, k_n: f32) -> Self {
+    pub fn new(k_p: f32, k_i: f32, k_d: f32, k_n: f32) -> Self {
         info!(
             "Initializing PID controller with gains: \
              \n\tKp \t{:} \n\tKi \t{:} \n\tKd \t{:} \n\tN \t{:}",
