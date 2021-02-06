@@ -26,15 +26,6 @@ pub enum ControlMode {
     Abort, // panic! dump all ballast and lock balloon valve closed
 }
 
-pub struct ControlMngr {
-    // Master altitude control state machine
-    mode: ControlMode,
-    valve_vent: Valve,    // valve to actuate in order to lower altitude
-    valve_dump: Valve,    // valve to actuate in order to raise altitude
-    target_altitude: f32, // target altitude hold in meters
-    altitude_error: f32,  // last known altitude error
-}
-
 impl fmt::Display for ControlMode {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
@@ -46,6 +37,15 @@ impl fmt::Display for ControlMode {
             ControlMode::Abort => write!(f, "Abort"),
         }
     }
+}
+
+pub struct ControlMngr {
+    // Master altitude control state machine
+    mode: ControlMode,
+    valve_vent: Valve,    // valve to actuate in order to lower altitude
+    valve_dump: Valve,    // valve to actuate in order to raise altitude
+    target_altitude: f32, // target altitude hold in meters
+    altitude_error: f32,  // last known altitude error
 }
 
 impl ControlMngr {
