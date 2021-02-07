@@ -58,10 +58,13 @@ impl Valve {
         // execute control algorithm to get control effort as PWM
         let control_effort = self.controller.next_control_output(altitude);
         // translate control effort to PWM
-        let mut new_pwm = control_effort.output;
-        if new_pwm < 0.0 {
-            new_pwm = 0.0
-        } // no negative PWM allowed
+        let mut new_pwm = control_effort.output.abs(); // WIP
+        if new_pwm > 1.0 {
+            new_pwm = 1.0 // clamp max to 1
+        } else if new_pwm < 0.0 {
+            new_pwm = 0.0 // clamp min to 0
+        }
+        debug!("PID effort: {:} | PWM {:}", control_effort.output, new_pwm);
         self.set_pwm(new_pwm)
     }
 }

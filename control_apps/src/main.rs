@@ -23,8 +23,9 @@ fn test_control_mngr() {
     // test mode transitions and other functions for debugging
     ctrl_manager.power_on_self_test();
     ctrl_manager.update(target_altitude - 500.0, 1.0);
-    ctrl_manager.update(target_altitude, 0.8);
+    ctrl_manager.update(target_altitude - 450.0, 0.8);
     ctrl_manager.update(target_altitude + 100.0, 0.5);
+    ctrl_manager.update(target_altitude, 0.2);
     ctrl_manager.update(target_altitude, 0.0);
     ctrl_manager.update(14999.9, 1.0);
 }

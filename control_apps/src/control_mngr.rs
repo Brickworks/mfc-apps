@@ -165,6 +165,9 @@ impl ControlMngr {
     ) {
         self.abort_if_out_of_ballast(ballast_mass);
         let error = altitude - self.target_altitude;
+        debug!("Altitude: {:} m ({:} m error) | State: {:}[{:}] | {:} kg ballast left",
+            altitude, error, self.state, self.substate, ballast_mass
+        );
         match self.state {
             ControlState::Init => {
                 // initialize the hardware and software
