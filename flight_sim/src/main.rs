@@ -3,45 +3,23 @@ extern crate pretty_env_logger;
 extern crate log;
 extern crate libm;
 
-mod atmosphere;
 mod gas;
-mod utils;
+mod force;
 
 fn main() {
     pretty_env_logger::init(); // initialize pretty print
 
-    let mut lift_gas = gas::GasVolume::new(gas::GasSpecies::He, 1.0);
-    lift_gas.set_temperature(utils::temperature_c2k(25.0));
-    info!("{:}", lift_gas);
-    lift_gas.set_temperature(utils::temperature_c2k(400.0));
-    info!("{:}", lift_gas);
-    let altitude = 10.0; // [m]
-    let ambient_temp = atmosphere::temperature(altitude);
-    let ambient_pres = atmosphere::pressure(altitude);
-    info!(
-        "Ambient conditions at {:} m: {:} K | {:} Pa",
-        altitude, ambient_temp, ambient_pres
-    );
-    let altitude = 10000.0; // [m]
-    let ambient_temp = atmosphere::temperature(altitude);
-    let ambient_pres = atmosphere::pressure(altitude);
-    info!(
-        "Ambient conditions at {:} m: {:} K | {:} Pa",
-        altitude, ambient_temp, ambient_pres
-    );
-    let altitude = 50000.0; // [m]
-    let ambient_temp = atmosphere::temperature(altitude);
-    let ambient_pres = atmosphere::pressure(altitude);
-    info!(
-        "Ambient conditions at {:} m: {:} K | {:} Pa",
-        altitude, ambient_temp, ambient_pres
-    );
-
-    let altitude = 100000.0; // [m]
-    let ambient_temp = atmosphere::temperature(altitude);
-    let ambient_pres = atmosphere::pressure(altitude);
-    info!(
-        "Ambient conditions at {:} m: {:} K | {:} Pa",
-        altitude, ambient_temp, ambient_pres
-    );
+    let mut altitude = 10000.0;
+    let mut atmo = gas::Atmosphere::new(altitude);
+    let mut lift_gas = gas::GasVolume::new(gas::GasSpecies::He, 0.5);
+    lift_gas.update_from_ambient(atmo);
+    info!("force: {:} N", force::net_force(altitude, 5.0, atmo, lift_gas, 0.25, 2.0));
+    altitude = 25000.0;
+    atmo.set_altitude(altitude);
+    lift_gas.update_from_ambient(atmo);
+    info!("force: {:} N", force::net_force(altitude, 5.0, atmo, lift_gas, 0.25, 2.0));
+    altitude = 35000.0;
+    atmo.set_altitude(altitude);
+    lift_gas.update_from_ambient(atmo);
+    info!("force: {:} N", force::net_force(altitude, 5.0, atmo, lift_gas, 0.25, 2.0));
 }
