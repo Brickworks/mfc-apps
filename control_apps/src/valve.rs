@@ -42,21 +42,12 @@ impl Valve {
 
     pub fn set_target(&mut self, new_target: f32) {
         // set the controller setpoint by initializing a new PID with target
-        self.controller = Pid::new(
-            self.controller.kp,
-            self.controller.ki,
-            self.controller.kd,
-            self.controller.p_limit,
-            self.controller.i_limit,
-            self.controller.d_limit,
-            self.controller.output_limit,
-            new_target,
-        )
+        self.controller.setpoint = new_target
     }
 
-    pub fn update_pwm(&mut self, altitude: f32) {
+    pub fn update_pwm(&mut self, measurement: f32) {
         // execute control algorithm to get control effort as PWM
-        let control_effort = self.controller.next_control_output(altitude);
+        let control_effort = self.controller.next_control_output(measurement);
         // translate control effort to PWM
         let mut new_pwm = control_effort.output.abs(); // WIP
         if new_pwm > 1.0 {

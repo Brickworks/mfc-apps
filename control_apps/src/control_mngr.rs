@@ -135,7 +135,7 @@ impl ControlMngr {
         &mut self,
         altitude: f32,     // instantaneous altitude in meters
         ballast_mass: f32, // ballast mass remining in kg
-    ) {
+    ) -> (f32, f32) {
         self.abort_if_out_of_ballast(ballast_mass);
         let error = altitude - self.target_altitude;
         debug!(
@@ -221,5 +221,6 @@ impl ControlMngr {
                 }
             }
         }
+        return (self.valve_vent.get_pwm(), self.valve_dump.get_pwm())
     }
 }
