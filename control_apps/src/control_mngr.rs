@@ -38,30 +38,9 @@ impl fmt::Display for ControlState {
     }
 }
 
-#[derive(Copy, Clone, PartialEq)]
-pub enum ControlSubState {
-    // Substates to dictate valve PWM constraints
-    Safe, // not allowed to actuate valves
-    Idle, // not worth actuating, sit tight to save control resources
-    Vent, // only open descent valve
-    Dump, // only open ascent valve
-}
-
-impl fmt::Display for ControlSubState {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            ControlSubState::Safe => write!(f, "Safe"),
-            ControlSubState::Idle => write!(f, "Idle"),
-            ControlSubState::Vent => write!(f, "Vent"),
-            ControlSubState::Dump => write!(f, "Dump"),
-        }
-    }
-}
-
 pub struct ControlMngr {
     // Master altitude control state machine
     state: ControlState,
-    substate: ControlSubState,
     valve_vent: Valve,    // valve to actuate in order to lower altitude
     valve_dump: Valve,    // valve to actuate in order to raise altitude
     target_altitude: f32, // target altitude hold in meters
@@ -109,7 +88,6 @@ impl ControlMngr {
         // return a configured control manager
         return ControlMngr {
             state: ControlState::Init,
-            substate: ControlSubState::Safe,
             valve_vent: valve_vent,
             valve_dump: valve_dump,
             target_altitude,
@@ -118,10 +96,6 @@ impl ControlMngr {
 
     pub fn get_state(&self) -> ControlState {
         return self.state;
-    }
-
-    pub fn get_substate(&self) -> ControlSubState {
-        return self.substate;
     }
 
     pub fn set_target(&mut self, target_altitude: f32) {
@@ -164,31 +138,30 @@ impl ControlMngr {
     ) {
         self.abort_if_out_of_ballast(ballast_mass);
         let error = altitude - self.target_altitude;
-        debug!("Altitude: {:} m ({:} m error) | State: {:}[{:}] | {:} kg ballast left",
-            altitude, error, self.state, self.substate, ballast_mass
+        debug!(
+            "Altitude: {:} m ({:} m error) | State: {:} | {:} kg ballast left",
+            altitude, error, self.state, ballast_mass
         );
         match self.state {
             ControlState::Init => {
                 // initialize the hardware and software
                 info!("Inititalizing Control Manager...");
                 self.power_on_self_test()
-            },
+            }
             ControlState::Ready => {
                 // lets do this!
-                if !(altitude <= CTRL_ALTITUDE_FLOOR) && error.abs() <= CTRL_ERROR_READY_THRESHOLD
-                {
+                if !(altitude <= CTRL_ALTITUDE_FLOOR) && error.abs() <= CTRL_ERROR_READY_THRESHOLD {
                     info!(
                         "{:}m is close enough to target {:}m -- Starting control!",
                         altitude, self.target_altitude
                     );
                     self.state = ControlState::Stabilize;
-                    self.substate = ControlSubState::Idle;
                 }
                 // transition from Ready --> Stabilize within this many meters
                 // of the set point
-            },
+            }
             ControlState::Stabilize => {
-                // not sure yet
+                // decide what to do in order to converge toward the target
                 if altitude <= CTRL_ALTITUDE_FLOOR {
                     self.state = ControlState::Abort;
                 } else {
@@ -200,14 +173,20 @@ impl ControlMngr {
                                 "Altitude {:}m is higher than target {:}m, vent gas",
                                 altitude, self.target_altitude
                             );
-                            self.substate = ControlSubState::Vent
+                            // close the vent valve
+                            self.valve_vent.set_pwm(0.0);
+                            // set the vent PWM to whatever the controller says
+                            self.valve_dump.update_pwm(altitude)
                         } else {
                             // raise altitude for error to converge to zero
                             debug!(
                                 "Altitude {:}m is lower than target {:}m, drop ballast",
                                 altitude, self.target_altitude
                             );
-                            self.substate = ControlSubState::Dump
+                            // close the dump valve
+                            self.valve_dump.set_pwm(0.0);
+                            // set the vent PWM to whatever the controller says
+                            self.valve_vent.update_pwm(altitude)
                         }
                     } else {
                         // if in dead zone, do nothing
@@ -215,54 +194,32 @@ impl ControlMngr {
                             "Altitude error {:}m less than deadzone threshold {:}m, do nothing",
                             error, CTRL_ERROR_DEADZONE
                         );
-                        self.substate = ControlSubState::Idle
-                    }
-                    // do something based on substate
-                    match self.substate {
-                        ControlSubState::Idle => { // nothing to do, sit tight
-                            // close the vent valve
-                            self.valve_vent.set_pwm(0.0);
-                            // close the dump valve
-                            self.valve_dump.set_pwm(0.0);
-                        },
-                        ControlSubState::Vent => { // get low
-                            // close the dump valve
-                            self.valve_dump.set_pwm(0.0);
-                            // set the vent PWM to whatever the controller says
-                            self.valve_vent.update_pwm(altitude)
-                        },
-                        ControlSubState::Dump => { // get high
-                            // close the vent valve
-                            self.valve_vent.set_pwm(0.0);
-                            // set the vent PWM to whatever the controller says
-                            self.valve_dump.update_pwm(altitude)
-                        },
-                        _ => {},// do nothing
+                        // close the vent valve
+                        self.valve_vent.set_pwm(0.0);
+                        // close the dump valve
+                        self.valve_dump.set_pwm(0.0);
                     }
                 }
-            },
+            }
             ControlState::Safe => {
-                // not sure yet
-                self.substate = ControlSubState::Safe;
+                // close the valves and sit tight
                 // close the vent valve
                 self.valve_vent.set_pwm(0.0);
                 // close the dump valve
                 self.valve_dump.set_pwm(0.0);
-            },
+            }
             ControlState::Abort => {
-                // not sure yet
+                // keep the balloon valve closed and dump all ballast
                 if ballast_mass <= 0.0 {
                     warn!("Out of ballast mass!");
                     self.state = ControlState::Safe;
-                    self.substate = ControlSubState::Safe;
                 } else {
-                    self.substate = ControlSubState::Dump;
                     // close the vent valve
                     self.valve_vent.set_pwm(0.0);
                     // open the dump valve
                     self.valve_dump.set_pwm(1.0);
                 }
-            },
+            }
         }
     }
 }
