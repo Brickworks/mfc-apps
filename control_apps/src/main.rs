@@ -8,10 +8,9 @@ mod valve;
 
 fn test_control_mngr() {
     // set bogus values for testing and debugging
-    let dt = 0.01; // seconds between datapoints
     let target_altitude = 25000.0; // meters
     let mut ctrl_manager = control_mngr::ControlMngr::new(
-        target_altitude,
+        20000.0, // some random target altitude
         1.0e-5_f32, // vent valve controller proportional gain
         1.0e-5_f32, // vent valve controller integral gain
         1.0e-5_f32, // vent valve controller derivatitve gain
@@ -19,7 +18,7 @@ fn test_control_mngr() {
         1.0e-5_f32, // dump valve controller integral gain
         1.0e-5_f32, // dump valve controller derivatitve gain
     );
-
+    ctrl_manager.set_target(target_altitude); // test setting target
     // test mode transitions and other functions for debugging
     ctrl_manager.power_on_self_test();
     ctrl_manager.update(target_altitude - 500.0, 1.0);

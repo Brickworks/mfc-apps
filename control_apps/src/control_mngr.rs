@@ -116,8 +116,12 @@ impl ControlMngr {
         };
     }
 
-    pub fn get_mode(&self) -> ControlState {
+    pub fn get_state(&self) -> ControlState {
         return self.state;
+    }
+
+    pub fn get_substate(&self) -> ControlSubState {
+        return self.substate;
     }
 
     pub fn set_target(&mut self, target_altitude: f32) {
@@ -133,11 +137,6 @@ impl ControlMngr {
                 CTRL_ALTITUDE_FLOOR
             );
         }
-    }
-
-    pub fn start_control(&mut self) {
-        // override enable altitude control+transition to idle
-        self.state = ControlState::Stabilize
     }
 
     pub fn power_on_self_test(&mut self) {
