@@ -4,12 +4,13 @@ version = "0.1.0"
 authors = ["Austin Bodzas <austinbodzas@gmail.com>"]
 edition = "2018"
 
+
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-nucleus_common = { path= "../nucleus_common" }
-
 nng = "0.5.1"
+rmp = "0.8.9"
 rmp-serde = "0.14.4"
 
 #tmp
@@ -17,11 +18,3 @@ serde_json = "1.0.57"
 
 serde = {version = "^1.0", features = ["derive"]}
 serde_derive = "^1.0"
-
-[[bin]]
-name = "manager"
-path = "src/manager/manager.rs"
-
-[[bin]]
-name = "monitor"
-path = "src/monitor/monitor.rs"
