@@ -6,6 +6,7 @@ use std::net::{SocketAddr, UdpSocket};
 use std::sync::mpsc::{Receiver, SyncSender};
 use std::thread;
 
+
 use nng;
 use rmp;
 use serde;
@@ -92,16 +93,25 @@ fn ipc_tx_loop(thread_rx: Receiver<Vec<u8>>) {
             }
         };
 
-        // grab extension code and size of data
-        let ext_meta = rmp::decode::read_ext_meta(&mut Cursor::new(&buf)).unwrap();
+        if buf.len() < 1 {
+            eprintln!("Error: received a message with a length of 0");
+            continue;
+        }
 
         // chop off extension, this might be janky? TODO find a better way
-        let data = &buf[(buf.len() - (ext_meta.size as usize))..];
+        //let data = &buf[(buf.len() - (ext_meta.size as usize))..];
+        let (msg_type, data) = buf.as_slice().split_at(1);
+        println!("Extension: {:x?}, Data: {:x?}", msg_type, data);
+
+        let msg_type = &msg_type[0];
+        if !(ext_to_topic_map.contains_key(msg_type)) {
+            eprintln!("Error: msg type id {:x?}", msg_type);
+            continue;
+        }
 
         let mut nng_msg = nng::Message::new().unwrap();
-
-        // TODO add ext meta to topic lookup table
-        let msg_content = fmt_nng_msg("testing", data);
+        let msg_content = fmt_nng_msg(ext_to_topic_map[msg_type], data);
+        println!("SUCCESS, message topic is: {:x?}", ext_to_topic_map[msg_type]);
 
         // publish nng_msg on nng
         nng_msg.write_all(msg_content.as_slice()).unwrap();
