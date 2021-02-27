@@ -8,6 +8,8 @@ use std::fmt;
 use std::thread::sleep; // only used to emulate some sort of POST
 use std::time::Duration;
 
+use log::{info, warn, debug};
+
 use crate::valve::Valve;
 use pid::Pid;
 

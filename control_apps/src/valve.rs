@@ -5,6 +5,8 @@
 // and the valves that regulate control reaction mass.
 // ----------------------------------------------------------------------------
 
+use log::{info, warn, error, debug};
+
 use pid::Pid;
 
 pub struct Valve {
