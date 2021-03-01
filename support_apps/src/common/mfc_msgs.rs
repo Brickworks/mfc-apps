@@ -28,6 +28,8 @@ impl<T: MFCMessage> MessageCache<T> {
 }
 
 //// Altitude Board Tlm ////
+pub const ALT_CTRL_TOPIC: &str = "altitude";
+
 #[derive(Serialize, Deserialize)]
 pub struct AltitudeBoardTlm {
     pub altitude: f32,

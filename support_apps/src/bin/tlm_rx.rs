@@ -6,6 +6,8 @@ use std::net::{SocketAddr, UdpSocket};
 use std::sync::mpsc::{Receiver, SyncSender};
 use std::thread;
 
+use mfc::common::mfc_msgs;
+
 
 use nng;
 use rmp;
@@ -76,7 +78,7 @@ fn ipc_tx_loop(thread_rx: Receiver<Vec<u8>>) {
 
     // maps incoming messages to their local ipc topics
     let ext_to_topic_map: HashMap<u8, &str> = [
-        (1, "balloon"),
+        (1, mfc_msgs::ALT_CTRL_TOPIC),
         (2, "power"),
         (3, "ground"),
         (4, "avionics"),

@@ -7,10 +7,10 @@ use nng::options::protocol::pubsub::Subscribe;
 use nng::options::{Options, RecvTimeout};
 use nng::{Message, PipeEvent, Protocol, Socket};
 
-
-use serde::Deserialize;
 use rmp_serde::Deserializer;
+use serde::Deserialize;
 
+use mfc::common::mfc_msgs;
 use mfc::common::mfc_msgs::{AltitudeBoardTlm, MessageCache};
 
 const CYCLE_RATE_HZ: f32 = 1.0;
@@ -20,32 +20,25 @@ const BASE_SLEEP_DURATION_US: Duration =
 fn tlm_listen(most_recent_msg: Arc<Mutex<MessageCache<AltitudeBoardTlm>>>) {
     let s = nng::Socket::new(nng::Protocol::Sub0).unwrap();
     s.dial("ipc:///tmp/nucleus").unwrap();
-    let all_topics = vec![];
-    s.set_opt::<Subscribe>(all_topics).unwrap();
+    s.set_opt::<Subscribe>(String::from(mfc_msgs::ALT_CTRL_TOPIC).into_bytes())
+        .unwrap();
+
+    let topic_len: usize = mfc_msgs::ALT_CTRL_TOPIC.chars().count() + 1;
 
     loop {
-        println!("Waiting...");
         let msg = match s.recv() {
             Ok(v) => v,
             Err(_) => continue,
         };
-        println!("Received: {}", std::str::from_utf8(&msg.as_slice()[..8]).unwrap());
 
-        //let cur = std::io::Cursor::new(msg.as_slice());
-        let mut de = Deserializer::new(&msg.as_slice()[8..]);
-        let x: Result<AltitudeBoardTlm, _> = Deserialize::deserialize(&mut de);
-        match x {
-            Err(e) => {
-                eprintln!("Error: {}", e);
-                eprintln!("{:?}", msg.as_slice())
-            },
-            Ok(v) => println!("Value: {:?}", v.altitude),
+        // Try and deserialize into a AltitudeBoardTlm msg
+        let mut de = Deserializer::new(&msg.as_slice()[topic_len..]);
+        let deser_msg = match Deserialize::deserialize(&mut de) as Result<AltitudeBoardTlm, _> {
+            Ok(v) => v,
+            Err(e) => continue,
         };
 
-        most_recent_msg
-            .lock()
-            .unwrap()
-            .update(AltitudeBoardTlm::default());
+        most_recent_msg.lock().unwrap().update(deser_msg);
     }
 }
 
@@ -56,9 +49,7 @@ fn main() {
 
     //println!("{}", most_recent_msg.lock().unwrap().timestamp);
 
-    let listener_thread = std::thread::spawn(move || {
-        tlm_listen(most_recent_msg)
-    });
+    let listener_thread = std::thread::spawn(move || tlm_listen(most_recent_msg));
 
     listener_thread.join();
 }
