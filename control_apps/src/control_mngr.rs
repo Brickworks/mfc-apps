@@ -8,13 +8,16 @@ use std::fmt;
 use std::thread::sleep; // only used to emulate some sort of POST
 use std::time::Duration;
 
+use log::{info, warn, debug};
+
 use crate::valve::Valve;
 use pid::Pid;
 
 const POST_DELAY_MS: u64 = 1000; // bogus delay to emulate POST operations
 const CTRL_ALTITUDE_FLOOR: f32 = 15000.0; // minimum allowed altitude in meters
-const CTRL_ERROR_DEADZONE: f32 = 100.0; // magnitude of margin to allow
-const CTRL_ERROR_READY_THRESHOLD: f32 = 500.0; // basically opposite of deadzone
+const CTRL_ERROR_DEADZONE: f32 = 100.0; // magnitude of margin to allow without actuation
+const CTRL_ERROR_READY_THRESHOLD: f32 = 1000.0; // basically opposite of deadzone
+const CTRL_SPEED_DEADZONE: f32 = 0.2; // magnitude of margin to allow without actuation
 
 #[derive(Copy, Clone, PartialEq)]
 pub enum ControlState {
@@ -134,6 +137,7 @@ impl ControlMngr {
     pub fn update(
         &mut self,
         altitude: f32,     // instantaneous altitude in meters
+        ascent_rate: f32,  // instantaneous ascent rate in meters per second
         ballast_mass: f32, // ballast mass remining in kg
     ) -> (f32, f32) {
         self.abort_if_out_of_ballast(ballast_mass);
@@ -156,6 +160,8 @@ impl ControlMngr {
                         altitude, self.target_altitude
                     );
                     self.state = ControlState::Stabilize;
+                    self.valve_vent.reset_controller();
+                    self.valve_dump.reset_controller();
                 }
                 // transition from Ready --> Stabilize within this many meters
                 // of the set point
@@ -165,35 +171,29 @@ impl ControlMngr {
                 if altitude <= CTRL_ALTITUDE_FLOOR {
                     self.state = ControlState::Abort;
                 } else {
-                    // check which substate to be in
-                    if error.abs() >= CTRL_ERROR_DEADZONE {
-                        if error > 0.0 {
+                    // Always update PID controllers so the algorithm is up to date
+                    let dump_control_effort = self.valve_dump.update_control(altitude);
+                    let vent_control_effort = self.valve_vent.update_control(altitude);
+
+                    // decide if/how to actuate valves
+                    if (error.abs() >= CTRL_ERROR_DEADZONE)
+                        & (ascent_rate.abs() >= CTRL_SPEED_DEADZONE)
+                    {
+                        if ascent_rate > 0.0 {
                             // lower altitude for error to converge to zero
-                            debug!(
-                                "Altitude {:}m is higher than target {:}m, vent gas",
-                                altitude, self.target_altitude
-                            );
+                            // set the vent PWM to whatever the controller says
+                            self.valve_vent.ctrl2pwm(vent_control_effort);
+                            // close the dump valve
+                            self.valve_dump.set_pwm(0.0);
+                        } else {
+                            // raise altitude for error to converge to zero
                             // close the vent valve
                             self.valve_vent.set_pwm(0.0);
                             // set the vent PWM to whatever the controller says
-                            self.valve_dump.update_pwm(altitude)
-                        } else {
-                            // raise altitude for error to converge to zero
-                            debug!(
-                                "Altitude {:}m is lower than target {:}m, drop ballast",
-                                altitude, self.target_altitude
-                            );
-                            // close the dump valve
-                            self.valve_dump.set_pwm(0.0);
-                            // set the vent PWM to whatever the controller says
-                            self.valve_vent.update_pwm(altitude)
+                            self.valve_dump.ctrl2pwm(dump_control_effort);
                         }
                     } else {
                         // if in dead zone, do nothing
-                        debug!(
-                            "Altitude error {:}m less than deadzone threshold {:}m, do nothing",
-                            error, CTRL_ERROR_DEADZONE
-                        );
                         // close the vent valve
                         self.valve_vent.set_pwm(0.0);
                         // close the dump valve
@@ -221,6 +221,6 @@ impl ControlMngr {
                 }
             }
         }
-        return (self.valve_vent.get_pwm(), self.valve_dump.get_pwm())
+        return (self.valve_vent.get_pwm(), self.valve_dump.get_pwm());
     }
 }

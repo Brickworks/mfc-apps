@@ -5,6 +5,8 @@
 // and the valves that regulate control reaction mass.
 // ----------------------------------------------------------------------------
 
+use log::{info, warn, error, debug};
+
 use pid::Pid;
 
 pub struct Valve {
@@ -16,8 +18,8 @@ pub struct Valve {
 impl Valve {
     pub fn new(controller: Pid<f32>) -> Self {
         Valve {
-            pwm: 0.0,         // PWM setting for open/close duty cycle
-            controller,       // controller used to update PWM
+            pwm: 0.0,   // PWM setting for open/close duty cycle
+            controller, // controller used to update PWM
         }
     }
 
@@ -32,7 +34,7 @@ impl Valve {
 
     pub fn get_pwm(&self) -> f32 {
         // report the valve's current PWM setting
-        return self.pwm
+        return self.pwm;
     }
 
     pub fn set_controller(&mut self, controller: Pid<f32>) {
@@ -45,17 +47,26 @@ impl Valve {
         self.controller.setpoint = new_target
     }
 
-    pub fn update_pwm(&mut self, measurement: f32) {
-        // execute control algorithm to get control effort as PWM
-        let control_effort = self.controller.next_control_output(measurement);
+    pub fn update_control(&mut self, measurement: f32) -> f32 {
+        // execute control algorithm to get control effort
+        return self.controller.next_control_output(measurement).output;
+    }
+
+    pub fn ctrl2pwm(&mut self, control_effort: f32) -> f32 {
         // translate control effort to PWM
-        let mut new_pwm = control_effort.output.abs(); // WIP
+        let mut new_pwm = control_effort.abs(); // WIP
         if new_pwm > 1.0 {
             new_pwm = 1.0 // clamp max to 1
         } else if new_pwm < 0.0 {
             new_pwm = 0.0 // clamp min to 0
         }
-        debug!("PID effort: {:} | PWM {:}", control_effort.output, new_pwm);
-        self.set_pwm(new_pwm)
+        debug!("PID effort: {:} | PWM {:}", control_effort, new_pwm);
+        return new_pwm;
+    }
+
+    pub fn reset_controller(&mut self) {
+        // reset the integral term of the controller
+        // use with caution!
+        self.controller.reset_integral_term();
     }
 }
