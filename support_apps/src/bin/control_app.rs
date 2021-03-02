@@ -12,6 +12,7 @@ use serde::Deserialize;
 
 use mfc::common::mfc_msgs;
 use mfc::common::mfc_msgs::{AltitudeBoardTlm, MessageCache};
+use control_apps::control_mngr;
 
 const CYCLE_RATE_HZ: f32 = 1.0;
 const BASE_SLEEP_DURATION_US: Duration =
@@ -42,47 +43,27 @@ fn tlm_listen(most_recent_msg: Arc<Mutex<MessageCache<AltitudeBoardTlm>>>) {
     }
 }
 
-fn update_thread() {}
+fn updater(most_recent_msg: Arc<Mutex<MessageCache<AltitudeBoardTlm>>>) {
+    let mut start = Instant::now();
+    let mut diff = BASE_SLEEP_DURATION_US - start.elapsed();
+
+    loop {
+
+        diff = BASE_SLEEP_DURATION_US - start.elapsed();
+        sleep(BASE_SLEEP_DURATION_US - start.elapsed());
+        start = Instant::now();
+    }
+}
 
 fn main() {
     let most_recent_msg = Arc::new(Mutex::new(MessageCache::<AltitudeBoardTlm>::default()));
 
     //println!("{}", most_recent_msg.lock().unwrap().timestamp);
 
-    let listener_thread = std::thread::spawn(move || tlm_listen(most_recent_msg));
+    let listener_msg_copy = most_recent_msg.clone();
+    let listener_thread = std::thread::spawn(move || tlm_listen(listener_msg_copy));
+    let update_thread = std::thread::spawn(move || updater(most_recent_msg));
 
-    listener_thread.join();
+    listener_thread.join().unwrap();
+    update_thread.join().unwrap();
 }
-
-/*
-fn main() {
-    // Subscribe to topics
-    // Update some local state in the callback
-    let s = nng::Socket::new(nng::Protocol::Sub0).unwrap();
-    s.dial("ipc:///tmp/nucleus").unwrap();
-    let all_topics = vec![];
-    s.set_opt::<Subscribe>(all_topics).unwrap();
-    s.set_opt::<RecvTimeout>(Some(Duration::from_millis(500))).unwrap();
-
-    let mut start = Instant::now();
-    let mut diff = BASE_SLEEP_DURATION_US - start.elapsed();
-    loop {
-        println!("Ello? {:?}", diff);
-        //update();
-
-        match s.recv() {
-            Err(_) => (),
-            Ok(v) => {
-                let subs = v.as_slice();
-                println!("Msg: {:?}", subs);
-            }
-        };
-
-
-        diff = BASE_SLEEP_DURATION_US - start.elapsed();
-        sleep(BASE_SLEEP_DURATION_US - start.elapsed());
-        start = Instant::now();
-    }
-
-}
-*/
