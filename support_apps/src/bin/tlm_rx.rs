@@ -7,15 +7,13 @@ use std::sync::mpsc::{Receiver, SyncSender};
 use std::thread;
 
 use mfc::common::mfc_msgs;
-
+use mfc::common::ipc;
 
 use nng;
 use rmp;
 use serde;
 
 static UDP_RX_ADDR: ([u8; 4], u16) = ([127, 0, 0, 1], 6666);
-static NNG_TX_ADDR: &str = "ipc:///tmp/nucleus";
-//static NNG_TX_ADDR: &str = "tcp://localhost:3008";
 
 #[derive(Debug, PartialEq, serde::Deserialize)]
 struct LatLon {
@@ -73,7 +71,7 @@ fn fmt_nng_msg(topic: &str, body: &[u8]) -> Vec<u8> {
 fn ipc_tx_loop(thread_rx: Receiver<Vec<u8>>) {
     // TODO move initialization of sockets to init function, moving into thread
     let s = nng::Socket::new(nng::Protocol::Pub0).unwrap();
-    s.listen(NNG_TX_ADDR).unwrap();
+    s.listen(ipc::NNG_TX_ADDR).unwrap();
     // TODO use contexts and spawn threads
 
     // maps incoming messages to their local ipc topics
@@ -112,7 +110,7 @@ fn ipc_tx_loop(thread_rx: Receiver<Vec<u8>>) {
         }
 
         let mut nng_msg = nng::Message::new().unwrap();
-        let msg_content = fmt_nng_msg(ext_to_topic_map[msg_type], data);
+        let msg_content = ipc::fmt_nng_msg(ext_to_topic_map[msg_type], data);
         println!("SUCCESS, message topic is: {:x?}", ext_to_topic_map[msg_type]);
 
         // publish nng_msg on nng
