@@ -42,6 +42,13 @@ impl fmt::Display for ControlState {
     }
 }
 
+pub struct ControlCommand {
+    // Commands to be distributed to the rest of the system as a result from
+    // a control input.
+    pub vent_pwm: f32,
+    pub dump_pwm: f32,
+}
+
 pub struct ControlMngr {
     // Master altitude control state machine
     state: ControlState,
@@ -140,7 +147,7 @@ impl ControlMngr {
         altitude: Measurement<f32>,     // instantaneous altitude in meters
         ascent_rate: Measurement<f32>,  // instantaneous ascent rate in meters per second
         ballast_mass: Measurement<f32>, // ballast mass remining in kg
-    ) -> (f32, f32) {
+    ) -> ControlCommand {
         self.abort_if_out_of_ballast(ballast_mass.value);
         let error = altitude.value - self.target_altitude;
         debug!(
@@ -222,6 +229,10 @@ impl ControlMngr {
                 }
             }
         }
-        return (self.valve_vent.get_pwm(), self.valve_dump.get_pwm());
+
+        return ControlCommand{
+            vent_pwm: self.valve_vent.get_pwm(),
+            dump_pwm: self.valve_dump.get_pwm()
+        }
     }
 }

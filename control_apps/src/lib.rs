@@ -1,4 +1,4 @@
 mod valve;
-mod measurement;
+pub mod measurement;
 
 pub mod control_mngr;

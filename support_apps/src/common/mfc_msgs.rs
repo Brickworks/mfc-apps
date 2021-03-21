@@ -1,4 +1,4 @@
-use std::time::{Duration, Instant};
+use std::time::Instant;
 use serde::{Serialize, Deserialize};
 
 pub trait MFCMessage: Default + Serialize {}
@@ -27,15 +27,15 @@ impl<T: MFCMessage> MessageCache<T> {
         self.msg = new_msg;
     }
 
-    /// Returns a duration from now until the msg was last updated.
-    /// MAX duration will be returned if it has not yet been updated.
-    pub fn get_age(&self) -> Duration {
+    /// Returns a timestamp of when the message was last sent.
+    /// Option None if message has not yet been set.
+    pub fn get_timestamp(&self) -> Option<Instant> {
 
         if !self.updated {
-            return Duration::new(u64::MAX, 0)
+            return None
         }
 
-        return Instant::now() - self.timestamp;
+        return Some(self.timestamp)
     }
 }
 
