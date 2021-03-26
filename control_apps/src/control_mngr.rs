@@ -11,6 +11,7 @@ use std::time::Duration;
 use log::{info, warn, debug};
 
 use crate::valve::Valve;
+use crate::measurement::Measurement;
 use pid::Pid;
 
 const POST_DELAY_MS: u64 = 1000; // bogus delay to emulate POST operations
@@ -39,6 +40,13 @@ impl fmt::Display for ControlState {
             ControlState::Abort => write!(f, "Abort"),
         }
     }
+}
+
+pub struct ControlCommand {
+    // Commands to be distributed to the rest of the system as a result from
+    // a control input.
+    pub vent_pwm: f32,
+    pub dump_pwm: f32,
 }
 
 pub struct ControlMngr {
@@ -136,15 +144,15 @@ impl ControlMngr {
 
     pub fn update(
         &mut self,
-        altitude: f32,     // instantaneous altitude in meters
-        ascent_rate: f32,  // instantaneous ascent rate in meters per second
-        ballast_mass: f32, // ballast mass remining in kg
-    ) -> (f32, f32) {
-        self.abort_if_out_of_ballast(ballast_mass);
-        let error = altitude - self.target_altitude;
+        altitude: Measurement<f32>,     // instantaneous altitude in meters
+        ascent_rate: Measurement<f32>,  // instantaneous ascent rate in meters per second
+        ballast_mass: Measurement<f32>, // ballast mass remining in kg
+    ) -> ControlCommand {
+        self.abort_if_out_of_ballast(ballast_mass.value);
+        let error = altitude.value - self.target_altitude;
         debug!(
             "Altitude: {:} m ({:} m error) | State: {:} | {:} kg ballast left",
-            altitude, error, self.state, ballast_mass
+            altitude.value, error, self.state, ballast_mass.value
         );
         match self.state {
             ControlState::Init => {
@@ -154,10 +162,10 @@ impl ControlMngr {
             }
             ControlState::Ready => {
                 // lets do this!
-                if !(altitude <= CTRL_ALTITUDE_FLOOR) && error.abs() <= CTRL_ERROR_READY_THRESHOLD {
+                if !(altitude.value <= CTRL_ALTITUDE_FLOOR) && error.abs() <= CTRL_ERROR_READY_THRESHOLD {
                     info!(
                         "{:}m is close enough to target {:}m -- Starting control!",
-                        altitude, self.target_altitude
+                        altitude.value, self.target_altitude
                     );
                     self.state = ControlState::Stabilize;
                     self.valve_vent.reset_controller();
@@ -168,18 +176,18 @@ impl ControlMngr {
             }
             ControlState::Stabilize => {
                 // decide what to do in order to converge toward the target
-                if altitude <= CTRL_ALTITUDE_FLOOR {
+                if altitude.value <= CTRL_ALTITUDE_FLOOR {
                     self.state = ControlState::Abort;
                 } else {
                     // Always update PID controllers so the algorithm is up to date
-                    let dump_control_effort = self.valve_dump.update_control(altitude);
-                    let vent_control_effort = self.valve_vent.update_control(altitude);
+                    let dump_control_effort = self.valve_dump.update_control(altitude.value);
+                    let vent_control_effort = self.valve_vent.update_control(altitude.value);
 
                     // decide if/how to actuate valves
                     if (error.abs() >= CTRL_ERROR_DEADZONE)
-                        & (ascent_rate.abs() >= CTRL_SPEED_DEADZONE)
+                        & (ascent_rate.value.abs() >= CTRL_SPEED_DEADZONE)
                     {
-                        if ascent_rate > 0.0 {
+                        if ascent_rate.value > 0.0 {
                             // lower altitude for error to converge to zero
                             // set the vent PWM to whatever the controller says
                             self.valve_vent.ctrl2pwm(vent_control_effort);
@@ -210,7 +218,7 @@ impl ControlMngr {
             }
             ControlState::Abort => {
                 // keep the balloon valve closed and dump all ballast
-                if ballast_mass <= 0.0 {
+                if ballast_mass.value <= 0.0 {
                     warn!("Out of ballast mass!");
                     self.state = ControlState::Safe;
                 } else {
@@ -221,6 +229,10 @@ impl ControlMngr {
                 }
             }
         }
-        return (self.valve_vent.get_pwm(), self.valve_dump.get_pwm());
+
+        return ControlCommand{
+            vent_pwm: self.valve_vent.get_pwm(),
+            dump_pwm: self.valve_dump.get_pwm()
+        }
     }
 }

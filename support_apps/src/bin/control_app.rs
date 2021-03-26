@@ -1,8 +1,8 @@
-use std::{env, thread};
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread::sleep;
 use std::time::{Duration, Instant};
+use std::{env, thread};
 
 use nng;
 use nng::options::protocol::pubsub::Subscribe;
@@ -12,7 +12,8 @@ use toml::Value;
 use rmp_serde::{Deserializer, Serializer};
 use serde::Deserialize;
 
-use control_apps::control_mngr::ControlMngr;
+use control_apps::control_mngr::{ControlCommand, ControlMngr};
+use control_apps::measurement::Measurement;
 use mfc::common::ipc::{self, NNG_PWM_ADDR};
 use mfc::common::mfc_msgs;
 use mfc::common::mfc_msgs::{AltitudeBoardTlm, MessageCache};
@@ -48,7 +49,7 @@ fn tlm_listen(most_recent_msg: Arc<Mutex<MessageCache<AltitudeBoardTlm>>>) {
     }
 }
 
-fn cmd_send(thread_rx: Receiver<(f32, f32)>) {
+fn cmd_send(thread_rx: Receiver<ControlCommand>) {
     let s = nng::Socket::new(nng::Protocol::Pub0).unwrap();
     s.listen(ipc::NNG_PWM_ADDR).unwrap();
 
@@ -62,7 +63,9 @@ fn cmd_send(thread_rx: Receiver<(f32, f32)>) {
         };
 
         let mut buffer = Vec::new();
-        pwms.serialize(&mut Serializer::new(&mut buffer)).unwrap();
+        (pwms.vent_pwm, pwms.dump_pwm)
+            .serialize(&mut Serializer::new(&mut buffer))
+            .unwrap();
 
         let msg_content = ipc::fmt_nng_msg("pwms", buffer.as_slice());
 
@@ -77,17 +80,34 @@ fn cmd_send(thread_rx: Receiver<(f32, f32)>) {
 fn updater(
     most_recent_msg: Arc<Mutex<MessageCache<AltitudeBoardTlm>>>,
     mngr: &mut ControlMngr,
-    thread_tx: Sender<(f32, f32)>,
+    thread_tx: Sender<ControlCommand>,
 ) {
     let mut start = Instant::now();
     loop {
         let incoming_msg_guard = most_recent_msg.lock().unwrap();
-        let incoming_msg = &incoming_msg_guard.msg;
+        let incoming_msg = &incoming_msg_guard;
 
-        let pwms = mngr.update(incoming_msg.altitude, 0.0, incoming_msg.ballast_mass);
-        std::mem::drop(incoming_msg_guard); // release the lock
+        if let Some(timestamp) = incoming_msg.get_timestamp() {
+            let pwms = mngr.update(
+                Measurement {
+                    value: incoming_msg.msg.altitude,
+                    timestamp: timestamp,
+                },
+                Measurement {
+                    value: 0.0,
+                    timestamp,
+                },
+                Measurement {
+                    value: incoming_msg.msg.ballast_mass,
+                    timestamp,
+                },
+            );
+            std::mem::drop(incoming_msg_guard); // release the lock
 
-        thread_tx.send(pwms).unwrap();
+            thread_tx.send(pwms).unwrap();
+        } else {
+            std::mem::drop(incoming_msg_guard); // release the lock
+        }
 
         sleep(BASE_SLEEP_DURATION_US - start.elapsed());
         start = Instant::now();
