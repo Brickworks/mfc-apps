@@ -20,6 +20,7 @@ const CTRL_ERROR_DEADZONE: f32 = 100.0; // magnitude of margin to allow without 
 const CTRL_ERROR_READY_THRESHOLD: f32 = 1000.0; // basically opposite of deadzone
 const CTRL_SPEED_DEADZONE: f32 = 0.2; // magnitude of margin to allow without actuation
 const CTRL_TLM_MAX_AGE: Duration = Duration::from_secs(2); // maximum age of telemetry to act on
+const CTRL_MIN_BALLAST: f32 = 0.01; // abort if ballast is less than this in kg
 
 #[derive(Copy, Clone, PartialEq)]
 pub enum ControlState {
@@ -137,7 +138,7 @@ impl ControlMngr {
     }
 
     fn abort_if_out_of_ballast(&mut self, ballast_mass: f32) {
-        if ballast_mass <= 0.0 {
+        if ballast_mass <= CTRL_MIN_BALLAST {
             // abort if there is no ballast left
             warn!("Not enough ballast mass! Ballast mass: {:}kg", ballast_mass);
             self.state = ControlState::Abort
