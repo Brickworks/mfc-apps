@@ -28,26 +28,16 @@ const R: f32 = BOLTZMANN_CONSTANT * AVOGADRO_CONSTANT; //[J/K-mol] Ideal gas con
 pub enum GasSpecies {
     // Species of gas with a known molar mass (kg/mol)
     Air,
-    He,
-    Helium,
-    H2,
-    Hydrogen,
-    N2,
-    Nitrogen,
-    O2,
-    Oxygen,
-    Ar,
-    Argon,
-    CO2,
-    CarbonDioxide,
-    Ne,
-    Neon,
-    Kr,
-    Krypton,
-    Xe,
-    Xenon,
-    CH4,
-    Methane,
+    He, Helium,
+    H2, Hydrogen,
+    N2, Nitrogen,
+    O2, Oxygen,
+    Ar, Argon,
+    CO2, CarbonDioxide,
+    Ne, Neon,
+    Kr, Krypton,
+    Xe, Xenon,
+    CH4, Methane,
 }
 
 impl fmt::Display for GasSpecies {
@@ -112,7 +102,7 @@ impl GasVolume {
         // N2  Nitrogen
         // O2  Oxygen
         // Ar  Argon
-        // CO2 Carbon Dioxide
+        // CO2 CarbonDioxide
         // Ne  Neon
         // Kr  Krypton
         // Xe  Xenon
@@ -280,14 +270,14 @@ fn coesa_temperature(altitude: f32) -> f32 {
     // Only valid for altitudes below 85,000 meters.
     // Based on the US Standard Atmosphere, 1976. (aka COESA)
     if altitude >= -57.0 && altitude < 11000.0 {
-        return (15.04 - 0.00649 * altitude) + 273.15;
+        return celsius2kelvin(15.04 - 0.00649 * altitude);
     } else if altitude >= 11000.0 && altitude < 25000.0 {
-        return -56.46 + 273.15;
+        return celsius2kelvin(-56.46);
     } else if altitude >= 25000.0 && altitude < 85000.0 {
-        return (-131.21 + 0.00299 * altitude) + 273.15;
+        return celsius2kelvin(-131.21 + 0.00299 * altitude);
     } else {
         error!(
-            "Altitude {:}m is outside of the accepted range! Must be 0-85,000m",
+            "Altitude {:}m is outside of the accepted range! Must be 0-85000m",
             altitude
         );
         return 0.0;
@@ -306,9 +296,14 @@ fn coesa_pressure(altitude: f32) -> f32 {
         return (2.488 * libm::powf(coesa_temperature(altitude) / 216.6, -11.388)) * 1000.0;
     } else {
         error!(
-            "Altitude {:}m is outside of the accepted range! Must be 0-85,000m",
+            "Altitude {:}m is outside of the accepted range! Must be 0-85000m",
             altitude
         );
         return 0.0;
     }
+}
+
+fn celsius2kelvin(deg_celsius: f32) -> f32 {
+    // Convert degrees C to Kelvin
+    return deg_celsius + 273.15
 }

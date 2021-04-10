@@ -88,6 +88,17 @@ impl Balloon {
             },
         }
     }
+
+    fn burst(&mut self) {
+        // Change balloon attributes if it has burst
+        self.intact = false;
+        self.c_d = 0;
+        // mass is conserved, it just no longer holds gas
+    }
+
+    pub fn exceeds_burst_condition(self) -> bool {
+
+    }
 }
 
 fn volume_from_diameter(diameter: f32) -> {
