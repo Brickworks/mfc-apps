@@ -1,0 +1,7 @@
+target_altitude_m = 24_000.0
+vent_kp = 1.0E-5
+vent_ki = 0.0E1
+vent_kd = 1.0E-3
+dump_kp = 1.0E-8
+dump_ki = 1.0E-5
+dump_kd = 1.0E-3
