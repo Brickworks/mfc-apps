@@ -52,7 +52,7 @@ impl Valve {
         return self.controller.next_control_output(measurement).output;
     }
 
-    pub fn ctrl2pwm(&mut self, control_effort: f32) -> f32 {
+    pub fn ctrl2pwm(&self, control_effort: f32) -> f32 {
         // translate control effort to PWM
         let mut new_pwm = control_effort.abs(); // WIP
         if new_pwm > 1.0 {

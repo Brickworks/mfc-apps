@@ -22,7 +22,7 @@ const CTRL_SPEED_DEADZONE: f32 = 0.2; // magnitude of margin to allow without ac
 const CTRL_TLM_MAX_AGE: Duration = Duration::from_secs(2); // maximum age of telemetry to act on
 const CTRL_MIN_BALLAST: f32 = 0.01; // abort if ballast is less than this in kg
 
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum ControlState {
     // States to dictate overall control states
     Init,      // startup, POST, FSW initialization, HW initialization
@@ -44,6 +44,7 @@ impl fmt::Display for ControlState {
     }
 }
 
+#[derive(Debug)]
 pub struct ControlCommand {
     // Commands to be distributed to the rest of the system as a result from
     // a control input.
@@ -221,7 +222,9 @@ impl ControlMngr {
                         if ascent_rate.value > 0.0 {
                             // lower altitude for error to converge to zero
                             // set the vent PWM to whatever the controller says
-                            self.valve_vent.ctrl2pwm(vent_control_effort);
+                            self.valve_vent.set_pwm(
+                                self.valve_vent.ctrl2pwm(vent_control_effort)
+                            );
                             // close the dump valve
                             self.valve_dump.set_pwm(0.0);
                             debug!(
@@ -234,7 +237,9 @@ impl ControlMngr {
                             // close the vent valve
                             self.valve_vent.set_pwm(0.0);
                             // set the vent PWM to whatever the controller says
-                            self.valve_dump.ctrl2pwm(dump_control_effort);
+                            self.valve_dump.set_pwm(
+                                self.valve_dump.ctrl2pwm(dump_control_effort)
+                            );
                             debug!(
                                 "[{:}] Dumping at {:}%",
                                 self.state,
@@ -287,5 +292,5 @@ impl ControlMngr {
 }
 
 fn is_stale(telemetry: &Measurement<f32>, max_age: Duration) -> bool {
-    return telemetry.timestamp.elapsed() <= max_age;
+    return telemetry.timestamp.elapsed() > max_age;
 }
