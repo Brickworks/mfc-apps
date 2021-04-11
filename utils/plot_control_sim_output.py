@@ -1,7 +1,7 @@
 import pandas as pd
 import matplotlib.pyplot as plt
 
-df = pd.read_csv("/home/abodzas/work/nucleus_sw/mfc-apps/support_apps/out.csv")
+df = pd.read_csv("support_apps/out.csv")
 
 fig, ax1 = plt.subplots()
 ax1.plot(df['t'], df['alt'], label="altitude", color="tab:red")

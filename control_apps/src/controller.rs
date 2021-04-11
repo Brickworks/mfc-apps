@@ -5,7 +5,7 @@
 // and the commands that regulate control reaction mass.
 // ----------------------------------------------------------------------------
 
-use log::{error, debug};
+use log::{debug, warn};
 
 use pid::Pid;
 
@@ -52,23 +52,23 @@ impl Controller {
 
 pub struct Valve {
     // Altitude control mass flow control valve
-    pwm: f32,           // instantaneous PWM setting [0, 1]
-    min_ctrl: f32,      // control effort upper limit
-    max_ctrl: f32,      // control effort upper limit
-    pub kp: f32,        // valve controller proportional gain
-    pub ki: f32,        // valve controller integral gain
-    pub kd: f32,        // valve controller derivatitve gain
+    pwm: f32,      // instantaneous PWM setting [0, 1]
+    min_ctrl: f32, // control effort upper limit
+    max_ctrl: f32, // control effort upper limit
+    pub kp: f32,   // valve controller proportional gain
+    pub ki: f32,   // valve controller integral gain
+    pub kd: f32,   // valve controller derivatitve gain
 }
 
 impl Valve {
     pub fn new(min_ctrl: f32, max_ctrl: f32, kp: f32, ki: f32, kd: f32) -> Self {
         Valve {
-            pwm: 0.0,   // PWM setting for open/close duty cycle
-            min_ctrl,   // control effort upper limit
-            max_ctrl,   // control effort upper limit
-            kp,         // valve controller proportional gain
-            ki,         // valve controller integral gain
-            kd,         // valve controller derivatitve gain
+            pwm: 0.0, // PWM setting for open/close duty cycle
+            min_ctrl, // control effort upper limit
+            max_ctrl, // control effort upper limit
+            kp,       // valve controller proportional gain
+            ki,       // valve controller integral gain
+            kd,       // valve controller derivatitve gain
         }
     }
 
@@ -77,7 +77,12 @@ impl Valve {
         if pwm_value >= 0.0 && pwm_value <= 1.0 {
             self.pwm = pwm_value
         } else {
-            error!("PWM {:} is not allowed! Must be [0, 1]", pwm_value)
+            warn!(
+                "Clamping PWM {:} to {:}",
+                pwm_value,
+                clamp(pwm_value, 0.0, 1.0)
+            );
+            self.pwm = clamp(pwm_value, 0.0, 1.0);
         }
     }
 
@@ -88,8 +93,7 @@ impl Valve {
 
     pub fn ctrl2pwm(&self, control_effort: f32) -> f32 {
         // translate control effort to PWM
-        let mut new_pwm = clamp(control_effort, self.min_ctrl, self.max_ctrl).abs();
-        new_pwm = clamp(new_pwm, 0.0, 1.0); // PWM can only be 0, 1
+        let new_pwm = clamp(control_effort, self.min_ctrl, self.max_ctrl).abs();
         debug!("PID effort: {:} | PWM {:}", control_effort, new_pwm);
         return new_pwm;
     }
@@ -98,11 +102,11 @@ impl Valve {
 fn clamp(val: f32, min: f32, max: f32) -> f32 {
     let clamped_val: f32;
     if val > max {
-        clamped_val = 1.0 // clamp to max
+        clamped_val = max // clamp to max
     } else if val < min {
-        clamped_val = 0.0 // clamp to min
+        clamped_val = min // clamp to min
     } else {
         clamped_val = val; // otherwise pass through
     }
-    return clamped_val
+    return clamped_val;
 }
