@@ -88,8 +88,8 @@ impl Valve {
 
     pub fn ctrl2pwm(&self, control_effort: f32) -> f32 {
         // translate control effort to PWM
-        let mut new_pwm = control_effort.abs(); // WIP
-        new_pwm = clamp(new_pwm, self.min_ctrl, self.max_ctrl);
+        let mut new_pwm = clamp(control_effort, self.min_ctrl, self.max_ctrl).abs();
+        new_pwm = clamp(new_pwm, 0.0, 1.0); // PWM can only be 0, 1
         debug!("PID effort: {:} | PWM {:}", control_effort, new_pwm);
         return new_pwm;
     }
