@@ -230,7 +230,7 @@ impl ControlMngr {
                             debug!(
                                 "[{:}] Venting at {:}%",
                                 self.state,
-                                self.valve_vent.get_pwm()
+                                self.valve_vent.get_pwm() * 100.0
                             );
                         } else {
                             // raise altitude for error to converge to zero
@@ -243,7 +243,7 @@ impl ControlMngr {
                             debug!(
                                 "[{:}] Dumping at {:}%",
                                 self.state,
-                                self.valve_dump.get_pwm()
+                                self.valve_dump.get_pwm() * 100.0
                             );
                         }
                     } else {
@@ -253,13 +253,17 @@ impl ControlMngr {
                         // close the dump valve
                         self.valve_dump.set_pwm(0.0);
                         debug!(
-                            "[{:}] Controller idle. Reason: {:}",
+                            "[{:}] Controller idle. Reason: {:#b}",
                             self.state,
                             ctrl_inhibitor_mask
                         );
                     }
                 } else {
                     // abort if altitude is lower than the lowest allowed value
+                    warn!(
+                        "{:}m lower than minimum {:}m --> Abort!",
+                        altitude.value, CTRL_ALTITUDE_FLOOR
+                    );
                     self.state = ControlState::Abort;
                 }
             }

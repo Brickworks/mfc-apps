@@ -6,6 +6,8 @@ use toml::Value;
 
 use control_apps::{control_mngr::{ControlCommand, ControlMngr}, measurement::Measurement};
 
+extern crate pretty_env_logger;
+
 const TIME_INDEX: usize = 0;
 const ALTITUDE_INDEX: usize = 5; 
 const ASCENT_RATE_INDEX: usize = 18;
@@ -47,6 +49,7 @@ fn read_in_data(path: &std::path::Path) -> Vec<StepInput> {
 
 #[test]
 fn test_open_loop() {
+    pretty_env_logger::init(); // initialize pretty print
     let csv_path = Path::new("./tests/data/run_ctrl-target-24000-no-mass-flow.csv");
     let inputs = read_in_data(csv_path);
 
