@@ -18,6 +18,8 @@
 
 use std::fmt;
 
+use log::{error, debug};
+
 const STANDARD_TEMPERATURE: f32 = 273.15; // [K]
 const STANDARD_PRESSURE: f32 = 101325.0; // [Pa]
 const BOLTZMANN_CONSTANT: f32 = 1.38e-23_f32; // [J/K]
