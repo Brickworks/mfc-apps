@@ -12,6 +12,8 @@ const TIME_INDEX: usize = 0;
 const ALTITUDE_INDEX: usize = 5; 
 const ASCENT_RATE_INDEX: usize = 18;
 const BALLAST_MASS_INDEX: usize = 19;
+const PRESSURE_INDEX: usize = 9;
+const TEMPERATURE_INDEX: usize = 10;
 
 #[derive(Debug)]
 struct StepInput {
@@ -19,6 +21,8 @@ struct StepInput {
     ascent_rate: f32,
     ballast_mass: f32,
     altitude: f32,
+    pressure: f32,
+    temperature: f32,
 }
 
 fn read_in_data(path: &std::path::Path) -> Vec<StepInput> {
@@ -34,12 +38,16 @@ fn read_in_data(path: &std::path::Path) -> Vec<StepInput> {
         let altitude: f32 = record[ALTITUDE_INDEX].parse().unwrap();
         let ascent_rate: f32 = record[ASCENT_RATE_INDEX].parse().unwrap();
         let ballast_mass: f32 = record[BALLAST_MASS_INDEX].parse().unwrap();
+        let pressure: f32 = record[PRESSURE_INDEX].parse().unwrap();
+        let temperature: f32 = record[TEMPERATURE_INDEX].parse().unwrap();
         inputs.push(
             StepInput{
                 time: time,
                 ascent_rate: ascent_rate,
                 ballast_mass: ballast_mass,
                 altitude: altitude,
+                pressure: pressure,
+                temperature: temperature,
             }
         );
     }
@@ -89,5 +97,54 @@ fn test_open_loop() {
         ]).unwrap();
         writer.flush().unwrap();
     }
+}
 
+#[test]
+fn test_closed_loop() {
+    pretty_env_logger::init(); // initialize pretty print
+
+    // configure simulation
+    let sim_config = std::fs::read_to_string("./config/sim_config.toml")
+        .unwrap()
+        .as_str()
+        .parse::<Value>()
+        .unwrap();
+
+    // configure controller
+    let ctrl_config = std::fs::read_to_string("./config/control_config.toml")
+        .unwrap()
+        .as_str()
+        .parse::<Value>()
+        .unwrap();
+    let mut mngr = ControlMngr::new(
+        ctrl_config["target_altitude_m"].as_float().unwrap() as f32,
+        ctrl_config["vent_kp"].as_float().unwrap() as f32,
+        ctrl_config["vent_ki"].as_float().unwrap() as f32,
+        ctrl_config["vent_kd"].as_float().unwrap() as f32,
+        ctrl_config["dump_kp"].as_float().unwrap() as f32,
+        ctrl_config["dump_ki"].as_float().unwrap() as f32,
+        ctrl_config["dump_kd"].as_float().unwrap() as f32,
+    );
+
+    let mut writer = csv::Writer::from_path("./out.csv").unwrap();
+    writer.write_record(&["t", "alt", "ar", "b", "vent", "dump"]).unwrap();
+    for input in inputs {
+        let now = Instant::now();
+
+        let cmd = mngr.update(
+            Measurement{value: input.altitude, timestamp: now},
+            Measurement{value: input.ascent_rate, timestamp: now},
+            Measurement{value: input.ballast_mass, timestamp: now},
+        );
+
+        writer.write_record(&[
+            input.time.to_string(),
+            input.altitude.to_string(),
+            input.ascent_rate.to_string(),
+            input.ballast_mass.to_string(),
+            cmd.vent_pwm.to_string(),
+            cmd.dump_pwm.to_string(),
+        ]).unwrap();
+        writer.flush().unwrap();
+    }
 }
