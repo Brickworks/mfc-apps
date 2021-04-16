@@ -136,7 +136,7 @@ impl GasVolume {
 
     pub fn set_mass(&mut self, new_mass: f32) {
         // set the mass (kg) of the GasVolume
-        if new_mass > 0.0 {
+        if new_mass >= 0.0 {
             self.mass = new_mass;
         } else {
             error!("Cannot set mass below zero!")

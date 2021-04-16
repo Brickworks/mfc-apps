@@ -1,6 +1,6 @@
 # flight configuration
 time_step_s = 0.01
-initial_altitude_m = 1373.0
+initial_altitude_m = 1_373.0
 initial_velocity_m_s = 0.0
 ballast_mass_kg = 0.5
 lift_gas_mass_kg = 1.5
@@ -17,4 +17,4 @@ box_drag_coeff = 0.8
 # parachute properties
 parachute_area_m2 = 1.1
 parachute_drag_coeff = 1.3
-parachute_open_altitude_m = 18_000
+parachute_open_altitude_m = 18_000.0

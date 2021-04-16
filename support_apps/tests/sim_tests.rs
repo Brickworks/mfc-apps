@@ -37,19 +37,20 @@ fn read_in_data(path: &std::path::Path) -> Vec<StepInput> {
         let temperature: f32 = record[TEMPERATURE_INDEX].parse().unwrap();
         inputs.push(StepInput {
             time: time,
-            ascent_rate: ascent_rate,
-            ballast_mass: ballast_mass,
             altitude: altitude,
+            ascent_rate: ascent_rate,
+            acceleration: 0.0,
+            ballast_mass: ballast_mass,
             pressure: pressure,
             temperature: temperature,
-            lift_gas_mass: -1.0, // not used
+            lift_gas_mass: 0.0, // not used
         });
     }
 
     inputs
 }
 
-// #[test]
+#[test]
 fn test_open_loop() {
     pretty_env_logger::init(); // initialize pretty print
     let csv_path = Path::new("./tests/data/run_ctrl-target-24000-no-mass-flow.csv");
@@ -111,7 +112,12 @@ fn test_closed_loop() {
     pretty_env_logger::init(); // initialize pretty print
 
     // configure simulation
-    let (mut input, sim_config) = simulate::init("./config/sim_config.toml");
+    let sim_config = std::fs::read_to_string("./config/sim_config.toml")
+        .unwrap()
+        .as_str()
+        .parse::<Value>()
+        .unwrap();
+    let (mut input, sim_config) = simulate::init(sim_config);
 
     // configure controller
     let ctrl_config = std::fs::read_to_string("./config/control_config.toml")
@@ -129,12 +135,13 @@ fn test_closed_loop() {
         ctrl_config["dump_kd"].as_float().unwrap() as f32,
     );
 
+    // set up data logger
     let mut writer = csv::Writer::from_path("./out.csv").unwrap();
     writer
-        .write_record(&["t", "alt", "ar", "b", "vent", "dump"])
+        .write_record(&["t", "alt", "ar", "ac", "b", "vent", "dump"])
         .unwrap();
-    
-    // create telemetry for the initial conditions
+
+    // log the initial condition
     let now = Instant::now();
     let cmd = mngr.update(
         Measurement {
@@ -155,13 +162,46 @@ fn test_closed_loop() {
             input.time.to_string(),
             input.altitude.to_string(),
             input.ascent_rate.to_string(),
+            input.acceleration.to_string(),
             input.ballast_mass.to_string(),
             cmd.vent_pwm.to_string(),
             cmd.dump_pwm.to_string(),
         ])
         .unwrap();
     writer.flush().unwrap();
-    while (input.time > 0.0) & (input.altitude > 0.0) {
+    
+    // conduct the first input manually to kick things off
+    input = simulate::step(input, sim_config);
+    // create commands and telemetry for the current timestep
+    let now = Instant::now();
+    let cmd = mngr.update(
+        Measurement {
+            value: input.altitude,
+            timestamp: now,
+        },
+        Measurement {
+            value: input.ascent_rate,
+            timestamp: now,
+        },
+        Measurement {
+            value: input.ballast_mass,
+            timestamp: now,
+        },
+    );
+    writer
+        .write_record(&[
+            input.time.to_string(),
+            input.altitude.to_string(),
+            input.ascent_rate.to_string(),
+            input.acceleration.to_string(),
+            input.ballast_mass.to_string(),
+            cmd.vent_pwm.to_string(),
+            cmd.dump_pwm.to_string(),
+        ])
+        .unwrap();
+    writer.flush().unwrap();
+    // now iterate until the altitude hits zero or time is too long
+    while (input.time < 30_000.0) & (input.altitude > 0.1) {
         // propagate the simulation forward by one timestep
         input = simulate::step(input, sim_config);
 
@@ -186,6 +226,7 @@ fn test_closed_loop() {
                 input.time.to_string(),
                 input.altitude.to_string(),
                 input.ascent_rate.to_string(),
+                input.acceleration.to_string(),
                 input.ballast_mass.to_string(),
                 cmd.vent_pwm.to_string(),
                 cmd.dump_pwm.to_string(),
