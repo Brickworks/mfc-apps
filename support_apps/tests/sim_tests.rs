@@ -1,29 +1,24 @@
 use csv;
 
-use std::{fs::File, time::Instant};
 use std::path::Path;
+use std::{fs::File, time::Instant};
 use toml::Value;
 
-use control_apps::{control_mngr::{ControlCommand, ControlMngr}, measurement::Measurement};
+use control_apps::{
+    control_mngr::{ControlCommand, ControlMngr},
+    measurement::Measurement,
+};
+use simulator::simulate;
+use simulator::simulate::StepInput;
 
 extern crate pretty_env_logger;
 
 const TIME_INDEX: usize = 0;
-const ALTITUDE_INDEX: usize = 5; 
+const ALTITUDE_INDEX: usize = 5;
 const ASCENT_RATE_INDEX: usize = 18;
 const BALLAST_MASS_INDEX: usize = 19;
 const PRESSURE_INDEX: usize = 9;
 const TEMPERATURE_INDEX: usize = 10;
-
-#[derive(Debug)]
-struct StepInput {
-    time: f32,
-    ascent_rate: f32,
-    ballast_mass: f32,
-    altitude: f32,
-    pressure: f32,
-    temperature: f32,
-}
 
 fn read_in_data(path: &std::path::Path) -> Vec<StepInput> {
     println!("{:?}", path);
@@ -40,22 +35,21 @@ fn read_in_data(path: &std::path::Path) -> Vec<StepInput> {
         let ballast_mass: f32 = record[BALLAST_MASS_INDEX].parse().unwrap();
         let pressure: f32 = record[PRESSURE_INDEX].parse().unwrap();
         let temperature: f32 = record[TEMPERATURE_INDEX].parse().unwrap();
-        inputs.push(
-            StepInput{
-                time: time,
-                ascent_rate: ascent_rate,
-                ballast_mass: ballast_mass,
-                altitude: altitude,
-                pressure: pressure,
-                temperature: temperature,
-            }
-        );
+        inputs.push(StepInput {
+            time: time,
+            ascent_rate: ascent_rate,
+            ballast_mass: ballast_mass,
+            altitude: altitude,
+            pressure: pressure,
+            temperature: temperature,
+            lift_gas_mass: -1.0, // not used
+        });
     }
 
     inputs
 }
 
-#[test]
+// #[test]
 fn test_open_loop() {
     pretty_env_logger::init(); // initialize pretty print
     let csv_path = Path::new("./tests/data/run_ctrl-target-24000-no-mass-flow.csv");
@@ -77,24 +71,37 @@ fn test_open_loop() {
     );
 
     let mut writer = csv::Writer::from_path("./out.csv").unwrap();
-    writer.write_record(&["t", "alt", "ar", "b", "vent", "dump"]).unwrap();
+    writer
+        .write_record(&["t", "alt", "ar", "b", "vent", "dump"])
+        .unwrap();
     for input in inputs {
         let now = Instant::now();
 
         let cmd = mngr.update(
-            Measurement{value: input.altitude, timestamp: now},
-            Measurement{value: input.ascent_rate, timestamp: now},
-            Measurement{value: input.ballast_mass, timestamp: now},
+            Measurement {
+                value: input.altitude,
+                timestamp: now,
+            },
+            Measurement {
+                value: input.ascent_rate,
+                timestamp: now,
+            },
+            Measurement {
+                value: input.ballast_mass,
+                timestamp: now,
+            },
         );
 
-        writer.write_record(&[
-            input.time.to_string(),
-            input.altitude.to_string(),
-            input.ascent_rate.to_string(),
-            input.ballast_mass.to_string(),
-            cmd.vent_pwm.to_string(),
-            cmd.dump_pwm.to_string(),
-        ]).unwrap();
+        writer
+            .write_record(&[
+                input.time.to_string(),
+                input.altitude.to_string(),
+                input.ascent_rate.to_string(),
+                input.ballast_mass.to_string(),
+                cmd.vent_pwm.to_string(),
+                cmd.dump_pwm.to_string(),
+            ])
+            .unwrap();
         writer.flush().unwrap();
     }
 }
@@ -104,11 +111,7 @@ fn test_closed_loop() {
     pretty_env_logger::init(); // initialize pretty print
 
     // configure simulation
-    let sim_config = std::fs::read_to_string("./config/sim_config.toml")
-        .unwrap()
-        .as_str()
-        .parse::<Value>()
-        .unwrap();
+    let (mut input, sim_config) = simulate::init("./config/sim_config.toml");
 
     // configure controller
     let ctrl_config = std::fs::read_to_string("./config/control_config.toml")
@@ -127,24 +130,67 @@ fn test_closed_loop() {
     );
 
     let mut writer = csv::Writer::from_path("./out.csv").unwrap();
-    writer.write_record(&["t", "alt", "ar", "b", "vent", "dump"]).unwrap();
-    for input in inputs {
-        let now = Instant::now();
-
-        let cmd = mngr.update(
-            Measurement{value: input.altitude, timestamp: now},
-            Measurement{value: input.ascent_rate, timestamp: now},
-            Measurement{value: input.ballast_mass, timestamp: now},
-        );
-
-        writer.write_record(&[
+    writer
+        .write_record(&["t", "alt", "ar", "b", "vent", "dump"])
+        .unwrap();
+    
+    // create telemetry for the initial conditions
+    let now = Instant::now();
+    let cmd = mngr.update(
+        Measurement {
+            value: input.altitude,
+            timestamp: now,
+        },
+        Measurement {
+            value: input.ascent_rate,
+            timestamp: now,
+        },
+        Measurement {
+            value: input.ballast_mass,
+            timestamp: now,
+        },
+    );
+    writer
+        .write_record(&[
             input.time.to_string(),
             input.altitude.to_string(),
             input.ascent_rate.to_string(),
             input.ballast_mass.to_string(),
             cmd.vent_pwm.to_string(),
             cmd.dump_pwm.to_string(),
-        ]).unwrap();
+        ])
+        .unwrap();
+    writer.flush().unwrap();
+    while (input.time > 0.0) & (input.altitude > 0.0) {
+        // propagate the simulation forward by one timestep
+        input = simulate::step(input, sim_config);
+
+        // create commands and telemetry for the current timestep
+        let now = Instant::now();
+        let cmd = mngr.update(
+            Measurement {
+                value: input.altitude,
+                timestamp: now,
+            },
+            Measurement {
+                value: input.ascent_rate,
+                timestamp: now,
+            },
+            Measurement {
+                value: input.ballast_mass,
+                timestamp: now,
+            },
+        );
+        writer
+            .write_record(&[
+                input.time.to_string(),
+                input.altitude.to_string(),
+                input.ascent_rate.to_string(),
+                input.ballast_mass.to_string(),
+                cmd.vent_pwm.to_string(),
+                cmd.dump_pwm.to_string(),
+            ])
+            .unwrap();
         writer.flush().unwrap();
     }
 }

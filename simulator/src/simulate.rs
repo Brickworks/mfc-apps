@@ -12,28 +12,29 @@ use toml::Value;
 
 #[derive(Debug)]
 pub struct StepInput {
-    time: f32,
-    altitude: f32,
-    ascent_rate: f32,
-    pressure: f32,
-    temperature: f32,
-    ballast_mass: f32,
-    lift_gas_mass: f32,
+    pub time: f32,
+    pub altitude: f32,
+    pub ascent_rate: f32,
+    pub pressure: f32,
+    pub temperature: f32,
+    pub ballast_mass: f32,
+    pub lift_gas_mass: f32,
 }
 
+#[derive(Copy, Clone)]
 pub struct SimConfig {
-    delta_t: f32,
-    dry_mass: f32,
-    lift_gas_species: GasSpecies,
-    box_area: f32,
-    box_drag_coeff: f32,
-    balloon_part_id: BalloonType,
-    parachute_area: f32,
-    parachute_open_alt: f32,
-    parachute_drag_coeff: f32,
+    pub delta_t: f32,
+    pub dry_mass: f32,
+    pub lift_gas_species: GasSpecies,
+    pub box_area: f32,
+    pub box_drag_coeff: f32,
+    pub balloon_part_id: BalloonType,
+    pub parachute_area: f32,
+    pub parachute_open_alt: f32,
+    pub parachute_drag_coeff: f32,
 }
 
-pub fn init(config_path: String) -> (StepInput, SimConfig) {
+pub fn init(config_path: &str) -> (StepInput, SimConfig) {
     // create an initial time step based on the config
     let sim_config = std::fs::read_to_string(config_path)
         .unwrap()
@@ -75,17 +76,23 @@ pub fn step(input: StepInput, config: SimConfig) -> StepInput {
     let mut balloon = Balloon::new(config.balloon_part_id, gas);
     let total_dry_mass = config.dry_mass + input.ballast_mass;
 
-    balloon.check_burst_condition();
+    let projected_area: f32;
+    let c_d: f32;
+    balloon.check_burst_condition(); // has the balloon popped?
     if balloon.intact {
-        let projected_area = force::sphere_area_from_volume(balloon.lift_gas.volume());
-        let c_d = balloon.c_d;
+        // balloon is intact
+        projected_area = force::sphere_area_from_volume(balloon.lift_gas.volume());
+        c_d = balloon.c_d;
     } else {
-        if input.altitude > config.parachute_open_alt {
-            let projected_area = config.parachute_drag_coeff;
-            let c_d = config.parachute_drag_coeff;
+        // balloon has popped
+        if input.altitude <= config.parachute_open_alt {
+            // parachute open
+            projected_area = config.parachute_area;
+            c_d = config.parachute_drag_coeff;
         } else {
-            let projected_area = config.box_area;
-            let c_d = config.box_drag_coeff;
+            // free fall, parachute not open
+            projected_area = config.box_area;
+            c_d = config.box_drag_coeff;
         }
     }
 
