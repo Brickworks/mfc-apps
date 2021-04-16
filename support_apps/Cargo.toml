@@ -14,6 +14,7 @@ nng = "0.5.1"
 rmp = "0.8.9"
 rmp-serde = "0.14.4"
 control_apps = {path = "../control_apps"}
+simulator = {path = "../simulator"}
 
 #tmp
 serde_json = "1.0.57"

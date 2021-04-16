@@ -1,11 +1,12 @@
 # flight configuration
+time_step_s = 0.01
 initial_altitude_m = 1373.0
 initial_velocity_m_s = 0.0
 ballast_mass_kg = 0.5
 lift_gas_mass_kg = 1.5
 
 # balloon properties
-balloon_part_no = "HAB_1200"
+balloon_part_id = "HAB_1200"
 lift_gas_species = "Helium"
 
 # payload box properties

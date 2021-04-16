@@ -5,9 +5,10 @@
 // ----------------------------------------------------------------------------
 
 extern crate libm;
-use std::f32::consts::PI
+use std::f32::consts::PI;
 use crate::gas;
 
+#[derive(Copy, Clone)]
 pub enum BalloonType {
     // balloon part numbers
     HAB_800,
@@ -92,16 +93,18 @@ impl Balloon {
     fn burst(&mut self) {
         // Change balloon attributes if it has burst
         self.intact = false;
-        self.c_d = 0;
+        self.c_d = 0.0;
         // mass is conserved, it just no longer holds gas
     }
 
-    pub fn exceeds_burst_condition(self) -> bool {
-
+    pub fn check_burst_condition(&mut self) {
+        if self.lift_gas.volume() > self.max_volume {
+            self.burst();
+        }
     }
 }
 
-fn volume_from_diameter(diameter: f32) -> {
+fn volume_from_diameter(diameter: f32) -> f32 {
     // spherical volume given its diameter
     return (4.0 / 3.0) * PI * libm::powf(diameter / 2.0, 3.0);
 }
