@@ -80,7 +80,7 @@ pub fn step(input: StepInput, config: &SimConfig) -> StepInput {
     let mut balloon = input.balloon;
     balloon.lift_gas.update_from_ambient(atmosphere);
 
-    // mass properties
+    // mass properties -- pretend to open valves as continuous control
     let ballast_mass =
         (input.ballast_mass - (input.dump_pwm * config.dump_mass_flow_rate)).max(0.0);
     balloon.lift_gas.set_mass(

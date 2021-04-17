@@ -106,8 +106,8 @@ fn log_to_file(input: &StepInput, writer: &mut csv::Writer<File>) {
             input.altitude.to_string(),
             input.ascent_rate.to_string(),
             input.acceleration.to_string(),
-            input.ballast_mass.to_string(),
             input.balloon.lift_gas.mass().to_string(),
+            input.ballast_mass.to_string(),
             input.vent_pwm.to_string(),
             input.dump_pwm.to_string(),
         ])
