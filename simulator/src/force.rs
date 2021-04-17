@@ -47,7 +47,7 @@ pub fn net_force(
     // [N]
     let weight_force = weight(altitude, total_dry_mass);
     let buoyancy_force = buoyancy(altitude, atmo, lift_gas);
-    let drag_force = drag(atmo, velocity, lift_gas.volume(), c_d);
+    let drag_force = drag(atmo, velocity, projected_area, c_d);
     return weight_force + buoyancy_force + drag_force;
 }
 

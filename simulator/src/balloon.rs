@@ -95,7 +95,6 @@ impl Balloon {
         self.intact = false;
         self.c_d = 0.0;
         self.lift_gas.set_mass(0.0);
-        // mass is conserved, it just no longer holds gas
     }
 
     pub fn check_burst_condition(&mut self) {

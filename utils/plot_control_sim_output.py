@@ -20,7 +20,7 @@ lines = []
 labels = []
 
 for ax in fig.axes:
-    #ax.set_xlim([4450, 4650])
+    # ax.set_xlim([0, 3000])
     axLine, axLabel = ax.get_legend_handles_labels()
     lines.extend(axLine)
     labels.extend(axLabel)
