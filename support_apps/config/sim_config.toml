@@ -12,7 +12,7 @@ lift_gas_species = "Helium"
 # payload box properties
 dry_mass_kg = 1.427
 box_area_m2 = 0.04
-box_drag_coeff = 0.8
+box_drag_coeff = 2.1
 
 # parachute properties
 parachute_area_m2 = 1.1

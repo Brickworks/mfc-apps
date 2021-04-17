@@ -1,33 +1,19 @@
 import pandas as pd
-import matplotlib.pyplot as plt
+import plotly.io as pio
+from plotly.subplots import make_subplots
+import plotly.graph_objects as go
+pio.templates.default = 'plotly_white'
 
 df = pd.read_csv("support_apps/out.csv")
+df = df.set_index('time')
 
-fig, ax1 = plt.subplots()
-ax1.plot(df['t'], df['alt'], label="altitude", color="tab:red")
-ax1.set_xlabel("Time (s)")
-ax1.set_ylabel("Altitude (m)")
-#ax1.legend()
+fig = make_subplots(rows=len(df.columns), cols=1)
+for colindex, colname in enumerate(df.columns):
+    fig.append_trace(go.Scatter(
+        x=df.index,
+        y=df[colname],
+        name=colname,
+    ), row=colindex+1, col=1)
 
-
-ax2 = ax1.twinx()
-ax2.set_ylabel("PWM amount")
-ax2.plot(df['t'], df['dump'], label="dump")
-ax2.plot(df['t'], df['vent'], label="vent")
-#ax2.legend()
-
-lines = []
-labels = []
-
-for ax in fig.axes:
-    # ax.set_xlim([0, 3000])
-    axLine, axLabel = ax.get_legend_handles_labels()
-    lines.extend(axLine)
-    labels.extend(axLabel)
-
-    
-fig.legend(lines, labels, "upper left")
-
-#plt.tight_layout()
-plt.savefig("t.png")
-
+fig.update_layout(height=2400, width=1800)
+fig.write_html("out_plot.html")

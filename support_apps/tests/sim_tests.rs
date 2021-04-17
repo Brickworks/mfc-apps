@@ -11,7 +11,7 @@ use simulator::{simulate, simulate::StepInput};
 
 extern crate pretty_env_logger;
 
-const MAX_SIM_TIME:f32 = 30_000.0; // max number of seconds for a simulation
+const MAX_SIM_TIME: f32 = 30_000.0; // max number of seconds for a simulation
 
 #[test]
 fn test_closed_loop() {
@@ -42,13 +42,10 @@ fn test_closed_loop() {
     );
 
     // set up data logger
-    let mut writer = csv::Writer::from_path("./out.csv").unwrap();
-    writer
-        .write_record(&["t", "alt", "ar", "ac", "b", "vent", "dump"])
-        .unwrap();
+    let mut writer = init_log_file();
 
     // now iterate until the altitude hits zero or time is too long
-    let mut first_run:bool = true;
+    let mut first_run: bool = true;
     while (input.time < MAX_SIM_TIME) & (input.altitude > 0.0) {
         if first_run {
             // just log the initial condition
@@ -85,6 +82,23 @@ fn update_control(mngr: &mut ControlMngr, input: &StepInput) -> ControlCommand {
     );
 }
 
+fn init_log_file() -> csv::Writer<File> {
+    let mut writer = csv::Writer::from_path("./out.csv").unwrap();
+    writer
+        .write_record(&[
+            "time",
+            "altitude_m",
+            "ascent_rate_m_s",
+            "acceleration_m_s2",
+            "lift_gas_mass_kg",
+            "ballast_mass_kg",
+            "vent_pwm",
+            "dump_pwm",
+        ])
+        .unwrap();
+    return writer
+}
+
 fn log_to_file(input: &StepInput, writer: &mut csv::Writer<File>) {
     writer
         .write_record(&[
@@ -93,6 +107,7 @@ fn log_to_file(input: &StepInput, writer: &mut csv::Writer<File>) {
             input.ascent_rate.to_string(),
             input.acceleration.to_string(),
             input.ballast_mass.to_string(),
+            input.balloon.lift_gas.mass().to_string(),
             input.vent_pwm.to_string(),
             input.dump_pwm.to_string(),
         ])
