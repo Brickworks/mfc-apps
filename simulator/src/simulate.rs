@@ -9,7 +9,6 @@ use crate::gas::{Atmosphere, GasSpecies, GasVolume};
 
 use toml::Value;
 
-#[derive(Copy, Clone)]
 pub struct StepInput {
     pub time: f32,
     pub altitude: f32,
@@ -22,7 +21,6 @@ pub struct StepInput {
     pub dump_pwm: f32,
 }
 
-#[derive(Copy, Clone)]
 pub struct SimConfig {
     pub delta_t: f32,
     pub dry_mass: f32,
@@ -75,7 +73,7 @@ pub fn init(config: Value) -> (StepInput, SimConfig) {
     );
 }
 
-pub fn step(input: StepInput, config: SimConfig) -> StepInput {
+pub fn step(input: StepInput, config: &SimConfig) -> StepInput {
     // propagate the closed loop simulation forward by one time step
     let time = input.time + config.delta_t;
     let mut atmosphere = input.atmosphere;
@@ -91,22 +89,22 @@ pub fn step(input: StepInput, config: SimConfig) -> StepInput {
 
     // switch drag conditions
     let projected_area: f32;
-    let c_d: f32;
+    let drag_coeff: f32;
     balloon.check_burst_condition(); // has the balloon popped?
     if balloon.intact {
         // balloon is intact
         projected_area = force::sphere_area_from_volume(balloon.lift_gas.volume());
-        c_d = balloon.c_d;
+        drag_coeff = balloon.drag_coeff;
     } else {
         // balloon has popped
         if input.altitude <= config.parachute_open_alt {
             // parachute open
             projected_area = config.parachute_area;
-            c_d = config.parachute_drag_coeff;
+            drag_coeff = config.parachute_drag_coeff;
         } else {
             // free fall, parachute not open
             projected_area = config.box_area;
-            c_d = config.box_drag_coeff;
+            drag_coeff = config.box_drag_coeff;
         }
     }
 
@@ -117,7 +115,7 @@ pub fn step(input: StepInput, config: SimConfig) -> StepInput {
         atmosphere,
         balloon.lift_gas,
         projected_area,
-        c_d,
+        drag_coeff,
         total_dry_mass,
     );
 

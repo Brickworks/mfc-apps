@@ -24,7 +24,7 @@ pub struct Balloon {
     pub lift_gas: gas::GasVolume,
     pub mass: f32, // balloon mass
     pub max_volume: f32, // burst above this volume
-    pub c_d: f32, // balloon approx drag coefficient
+    pub drag_coeff: f32, // balloon approx drag coefficient
     pub recommended_free_lift: f32, // recommended free lift at launch
     pub intact: bool, // whether or not it has burst
 }
@@ -38,7 +38,7 @@ impl Balloon {
                     lift_gas,
                     mass: 0.8,
                     max_volume: volume_from_diameter(7.0),
-                    c_d: 0.3,
+                    drag_coeff: 0.3,
                     recommended_free_lift: 0.970,
                     intact: true,
                 }
@@ -49,7 +49,7 @@ impl Balloon {
                     lift_gas,
                     mass: 1.2,
                     max_volume: volume_from_diameter(8.63),
-                    c_d: 0.25,
+                    drag_coeff: 0.25,
                     recommended_free_lift: 1.19,
                     intact: true,
                 }
@@ -60,7 +60,7 @@ impl Balloon {
                     lift_gas,
                     mass: 1.5,
                     max_volume: volume_from_diameter(9.44),
-                    c_d: 0.25,
+                    drag_coeff: 0.25,
                     recommended_free_lift: 1.28,
                     intact: true,
                 }
@@ -71,7 +71,7 @@ impl Balloon {
                     lift_gas,
                     mass: 2.0,
                     max_volume: volume_from_diameter(10.54),
-                    c_d: 0.25,
+                    drag_coeff: 0.25,
                     recommended_free_lift: 1.42,
                     intact: true,
                 }
@@ -82,7 +82,7 @@ impl Balloon {
                     lift_gas,
                     mass: 3.0,
                     max_volume: volume_from_diameter(13.0),
-                    c_d: 0.25,
+                    drag_coeff: 0.25,
                     recommended_free_lift: 1.67,
                     intact: true,
                 }
@@ -93,7 +93,7 @@ impl Balloon {
     fn burst(&mut self) {
         // Change balloon attributes if it has burst
         self.intact = false;
-        self.c_d = 0.0;
+        self.drag_coeff = 0.0;
         self.lift_gas.set_mass(0.0);
     }
 

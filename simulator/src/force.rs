@@ -29,10 +29,13 @@ fn buoyancy(altitude: f32, atmo: gas::Atmosphere, lift_gas: gas::GasVolume) -> f
     return lift_gas.volume() * (rho_lift - rho_atmo) * g(altitude);
 }
 
-fn drag(atmo: gas::Atmosphere, velocity: f32, projected_area: f32, c_d: f32) -> f32 {
+fn drag(atmo: gas::Atmosphere, velocity: f32, projected_area: f32, drag_coeff: f32) -> f32 {
     // Force (N) due to drag against the balloon
     let direction = -libm::copysignf(1.0, velocity);
-    return direction * c_d / 2.0 * atmo.density() * libm::powf(velocity, 2.0) * projected_area;
+    return direction * drag_coeff / 2.0
+        * atmo.density()
+        * libm::powf(velocity, 2.0)
+        * projected_area;
 }
 
 pub fn net_force(
@@ -41,13 +44,13 @@ pub fn net_force(
     atmo: gas::Atmosphere,
     lift_gas: gas::GasVolume,
     projected_area: f32,
-    c_d: f32,
+    drag_coeff: f32,
     total_dry_mass: f32,
 ) -> f32 {
     // [N]
     let weight_force = weight(altitude, total_dry_mass);
     let buoyancy_force = buoyancy(altitude, atmo, lift_gas);
-    let drag_force = drag(atmo, velocity, projected_area, c_d);
+    let drag_force = drag(atmo, velocity, projected_area, drag_coeff);
     return weight_force + buoyancy_force + drag_force;
 }
 
