@@ -14,9 +14,14 @@ nng = "0.5.1"
 rmp = "0.8.9"
 rmp-serde = "0.14.4"
 control_apps = {path = "../control_apps"}
+simulator = {path = "../simulator"}
 
 #tmp
 serde_json = "1.0.57"
 
 serde = {version = "^1.0", features = ["derive"]}
 serde_derive = "^1.0"
+
+[dev-dependencies]
+csv = "1.1.6"
+pretty_env_logger = "0.4.0"
