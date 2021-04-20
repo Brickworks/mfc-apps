@@ -2,9 +2,9 @@ use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread::sleep;
 use std::time::{Duration, Instant};
-use std::{env, thread};
+use std::{env};
 
-use nng;
+
 use nng::options::protocol::pubsub::Subscribe;
 use nng::options::Options;
 use toml::Value;
@@ -14,7 +14,7 @@ use serde::Deserialize;
 
 use control_apps::control_mngr::{ControlCommand, ControlMngr};
 use control_apps::measurement::Measurement;
-use mfc::common::ipc::{self, NNG_PWM_ADDR};
+use mfc::common::ipc::{self};
 use mfc::common::mfc_msgs;
 use mfc::common::mfc_msgs::{AltitudeBoardTlm, MessageCache};
 
@@ -91,7 +91,7 @@ fn updater(
             let pwms = mngr.update(
                 Measurement {
                     value: incoming_msg.msg.altitude,
-                    timestamp: timestamp,
+                    timestamp,
                 },
                 Measurement {
                     value: 0.0,

@@ -1,4 +1,4 @@
-use mfc::common::mfc_msgs::*;
+
 use mfc::manager::ipc_receiver::*;
 
 mod manager_state {
@@ -36,11 +36,7 @@ mod manager_state {
         }
         /// Determine if we should cutdown based on latches and the given arm state
         pub fn should_we_cutdown(&self) -> bool {
-            if self.cutdown_armed && (self.cutdown_ground || self.cutdown_ctrl) {
-                true
-            } else {
-                false
-            }
+            self.cutdown_armed && (self.cutdown_ground || self.cutdown_ctrl)
         }
     }
 }
@@ -50,37 +46,43 @@ fn main() {
 
     let mut cutdown_state_tracker = manager_state::CutdownStateTracker::new();
 
-    let alt_ctrl_status_msg = messages.get_alt_ctrl_status();
+    let _alt_ctrl_status_msg = messages.get_alt_ctrl_status();
     let alt_ctrl_arm_msg = messages.get_alt_ctrl_arm();
     let ground_cmd_msg = messages.get_ground_cmd();
 
+    let mut loop_once = false;
     loop {
         // Update received IPC messages
         // TODO: maybe block until we get a message type we want?
-        messages.update();
+        messages.update().unwrap();
 
         //// UPDATE STATE ////
         // Update cutdown state
-        if ground_cmd_msg.msg.arm_cutdown == true {
+        if ground_cmd_msg.msg.arm_cutdown {
             cutdown_state_tracker.arm();
         }
 
-        if ground_cmd_msg.msg.cutdown == true {
+        if ground_cmd_msg.msg.cutdown {
             cutdown_state_tracker.set_cutdown_ground();
         }
 
-        if alt_ctrl_arm_msg.msg.cutdown == true {
+        if alt_ctrl_arm_msg.msg.cutdown {
             cutdown_state_tracker.set_cutdown_ctrl();
         }
 
         //// COMMAND /////
-        if cutdown_state_tracker.should_we_cutdown() == true {
+        if cutdown_state_tracker.should_we_cutdown() {
             // SEND CUTDOWN COMMAND
         }
 
         // tmp for dev
         println!("Finished loop");
-        break;
+
+        if loop_once {
+            break;
+        }
+
+        loop_once = true;
     }
 
     // 1) recv msgs (cache messages that have been received, may need to add timestamps)

@@ -1,17 +1,17 @@
 extern crate rmp_serde as rmps;
 
 use std::collections::HashMap;
-use std::io::{Cursor, Write};
+use std::io::{Write};
 use std::net::{SocketAddr, UdpSocket};
 use std::sync::mpsc::{Receiver, SyncSender};
-use std::thread;
+use std::{thread, time};
 
 use mfc::common::mfc_msgs;
 use mfc::common::ipc;
 
-use nng;
-use rmp;
-use serde;
+
+
+
 
 static UDP_RX_ADDR: ([u8; 4], u16) = ([127, 0, 0, 1], 6666);
 
@@ -30,7 +30,7 @@ fn eth_rx_loop(thread_tx: SyncSender<Vec<u8>>) {
         Ok(v) => v,
         Err(e) => {
             println!("Creating socket error: {:?}", e);
-            return ();
+            return ;
         }
     };
 
@@ -55,7 +55,9 @@ fn eth_rx_loop(thread_tx: SyncSender<Vec<u8>>) {
 fn can_rx_loop(_thread_tx: SyncSender<Vec<u8>>) {
     // TODO implement receiving CAN messages
     // TODO implement sending these messages via intra thread comms
-    loop {}
+    loop {
+        thread::sleep(time::Duration::from_millis(1_000));
+    }
 }
 
 /// Construct a NNG message with the given topic
@@ -93,7 +95,7 @@ fn ipc_tx_loop(thread_rx: Receiver<Vec<u8>>) {
             }
         };
 
-        if buf.len() < 1 {
+        if buf.is_empty() {
             eprintln!("Error: received a message with a length of 0");
             continue;
         }
