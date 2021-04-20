@@ -20,5 +20,5 @@ parachute_drag_coeff = 1.3
 parachute_open_altitude_m = 18_000.0
 
 # valve properties
-vent_valve_mass_flow_kg_s = 0.001
-dump_valve_mass_flow_kg_s = 0.0001
+vent_valve_mass_flow_kg_s = 0.007
+dump_valve_mass_flow_kg_s = 0.001
