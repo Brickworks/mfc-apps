@@ -11,11 +11,11 @@ use crate::gas;
 #[derive(Copy, Clone)]
 pub enum BalloonType {
     // balloon part numbers
-    HAB_800,
-    HAB_1200,
-    HAB_1500,
-    HAB_2000,
-    HAB_3000,
+    Hab800,
+    Hab1200,
+    Hab1500,
+    Hab2000,
+    Hab3000,
 }
 
 #[derive(Copy, Clone)]
@@ -32,7 +32,7 @@ pub struct Balloon {
 impl Balloon {
     pub fn new(part_no: BalloonType, lift_gas: gas::GasVolume) -> Self {
         match part_no {
-            BalloonType::HAB_800 => {
+            BalloonType::Hab800 => {
                 Balloon {
                     part_no,
                     lift_gas,
@@ -43,7 +43,7 @@ impl Balloon {
                     intact: true,
                 }
             },
-            BalloonType::HAB_1200 => {
+            BalloonType::Hab1200 => {
                 Balloon {
                     part_no,
                     lift_gas,
@@ -54,7 +54,7 @@ impl Balloon {
                     intact: true,
                 }
             },
-            BalloonType::HAB_1500 => {
+            BalloonType::Hab1500 => {
                 Balloon {
                     part_no,
                     lift_gas,
@@ -65,7 +65,7 @@ impl Balloon {
                     intact: true,
                 }
             },
-            BalloonType::HAB_2000 => {
+            BalloonType::Hab2000 => {
                 Balloon {
                     part_no,
                     lift_gas,
@@ -76,7 +76,7 @@ impl Balloon {
                     intact: true,
                 }
             },
-            BalloonType::HAB_3000 => {
+            BalloonType::Hab3000 => {
                 Balloon {
                     part_no,
                     lift_gas,
@@ -106,5 +106,5 @@ impl Balloon {
 
 fn volume_from_diameter(diameter: f32) -> f32 {
     // spherical volume given its diameter
-    return (4.0 / 3.0) * PI * libm::powf(diameter / 2.0, 3.0);
+    (4.0 / 3.0) * PI * libm::powf(diameter / 2.0, 3.0)
 }

@@ -37,7 +37,7 @@ pub struct SimConfig {
 
 pub fn init(config: Value) -> (StepInput, SimConfig) {
     // create an initial time step based on the config
-    let balloon_part_id = BalloonType::HAB_2000;
+    let balloon_part_id = BalloonType::Hab2000;
     let altitude = config["initial_altitude_m"].as_float().unwrap() as f32;
     let atmo = Atmosphere::new(altitude);
     let gas = GasVolume::new(
@@ -45,14 +45,14 @@ pub fn init(config: Value) -> (StepInput, SimConfig) {
         config["lift_gas_mass_kg"].as_float().unwrap() as f32,
     );
     let balloon = Balloon::new(balloon_part_id, gas);
-    return (
+    (
         StepInput {
             time: 0.0,
             altitude: config["initial_altitude_m"].as_float().unwrap() as f32,
             ascent_rate: config["initial_velocity_m_s"].as_float().unwrap() as f32,
             acceleration: 0.0,
             atmosphere: atmo,
-            balloon: balloon,
+            balloon,
             ballast_mass: config["ballast_mass_kg"].as_float().unwrap() as f32,
             vent_pwm: 0.0,
             dump_pwm: 0.0,
@@ -63,14 +63,14 @@ pub fn init(config: Value) -> (StepInput, SimConfig) {
             lift_gas_species: GasSpecies::Helium,
             box_area: config["box_area_m2"].as_float().unwrap() as f32,
             box_drag_coeff: config["box_drag_coeff"].as_float().unwrap() as f32,
-            balloon_part_id: balloon_part_id,
+            balloon_part_id,
             parachute_area: config["parachute_area_m2"].as_float().unwrap() as f32,
             parachute_open_alt: config["parachute_open_altitude_m"].as_float().unwrap() as f32,
             parachute_drag_coeff: config["parachute_drag_coeff"].as_float().unwrap() as f32,
             vent_mass_flow_rate: config["vent_valve_mass_flow_kg_s"].as_float().unwrap() as f32,
             dump_mass_flow_rate: config["dump_valve_mass_flow_kg_s"].as_float().unwrap() as f32,
         },
-    );
+    )
 }
 
 pub fn step(input: StepInput, config: &SimConfig) -> StepInput {
@@ -129,7 +129,7 @@ pub fn step(input: StepInput, config: &SimConfig) -> StepInput {
     let vent_pwm = input.vent_pwm;
     let dump_pwm = input.dump_pwm;
 
-    return StepInput {
+    StepInput {
         time,
         altitude,
         ascent_rate,
@@ -139,5 +139,5 @@ pub fn step(input: StepInput, config: &SimConfig) -> StepInput {
         ballast_mass,
         vent_pwm,
         dump_pwm,
-    };
+    }
 }
