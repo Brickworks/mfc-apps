@@ -1,6 +1,6 @@
 use std::net::{UdpSocket};
 
-use rmp;
+
 use rmp_serde as rmps;
 use serde::Serialize;
 use rmps::Serializer;

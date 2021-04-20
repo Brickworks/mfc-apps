@@ -4,6 +4,7 @@ use serde::{Serialize, Deserialize};
 pub trait MFCMessage: Default + Serialize {}
 
 /// Cache of a message, storing the timestamp received along with the body
+#[derive(Debug)]
 pub struct MessageCache<T: MFCMessage> {
     timestamp: Instant,
     updated: bool,
@@ -35,7 +36,7 @@ impl<T: MFCMessage> MessageCache<T> {
             return None
         }
 
-        return Some(self.timestamp)
+        Some(self.timestamp)
     }
 }
 
@@ -60,7 +61,7 @@ impl Default for AltitudeBoardTlm {
 }
 
 //// Altitude Control Status ////
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct AltCtrlStatus {
     pub cutdown: bool,
 }
@@ -74,7 +75,7 @@ impl Default for AltCtrlStatus {
 }
 
 //// Altitude Control Arm ////
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct AltCtrlCmd {
     /// True: request actuator control to be armed, false to disarm
     pub arm_actuator: bool,
@@ -94,7 +95,7 @@ impl Default for AltCtrlCmd {
 }
 
 //// Ground Command ////
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct GroundCmd {
     pub arm_alt_ctrl: bool,
     pub arm_cutdown: bool,

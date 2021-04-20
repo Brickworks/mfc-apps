@@ -156,26 +156,26 @@ impl GasVolume {
 
     pub fn temperature(self) -> f32 {
         // temperature (K)
-        return self.temperature;
+        self.temperature
     }
 
     pub fn pressure(self) -> f32 {
         // pressure (Pa)
-        return self.pressure;
+        self.pressure
     }
 
     pub fn mass(self) -> f32 {
         // mass (kg)
-        return self.mass;
+        self.mass
     }
     pub fn density(self) -> f32 {
         // density (kg/m^3)
-        return density(self.temperature, self.pressure, self.molar_mass);
+        density(self.temperature, self.pressure, self.molar_mass)
     }
 
     pub fn volume(&self) -> f32 {
         // volume (m^3)
-        return volume(self.temperature, self.pressure, self.mass, self.molar_mass);
+        volume(self.temperature, self.pressure, self.mass, self.molar_mass)
     }
 }
 
@@ -227,30 +227,30 @@ impl Atmosphere {
 
     pub fn temperature(self) -> f32 {
         // Temperature (K)
-        return self.temperature;
+        self.temperature
     }
 
     pub fn pressure(self) -> f32 {
         // Pressure (Pa)
-        return self.pressure;
+        self.pressure
     }
 
     pub fn density(self) -> f32 {
         // Density (kg/m^3)
-        return self.density;
+        self.density
     }
 }
 
 fn volume(temperature: f32, pressure: f32, mass: f32, molar_mass: f32) -> f32 {
     // Volume (m^3) of an ideal gas from its temperature (K), pressure (Pa),
     // mass (kg) and molar mass (kg/mol).
-    return (mass / molar_mass) * R * temperature / pressure; // [m^3]
+    (mass / molar_mass) * R * temperature / pressure // [m^3]
 }
 
 fn density(temperature: f32, pressure: f32, molar_mass: f32) -> f32 {
     // Density (kg/m^3) of an ideal gas frorm its temperature (K), pressure (Pa),
     // and molar mass (kg/mol)
-    return (molar_mass * pressure) / (R * temperature); // [kg/m^3]
+    (molar_mass * pressure) / (R * temperature) // [kg/m^3]
 }
 
 fn molar_mass(species: GasSpecies) -> f32 {
@@ -275,18 +275,18 @@ fn coesa_temperature(altitude: f32) -> f32 {
     // Temperature (K) of the atmosphere at a given altitude (m).
     // Only valid for altitudes below 85,000 meters.
     // Based on the US Standard Atmosphere, 1976. (aka COESA)
-    if altitude >= -57.0 && altitude < 11000.0 {
-        return celsius2kelvin(15.04 - 0.00649 * altitude);
-    } else if altitude >= 11000.0 && altitude < 25000.0 {
-        return celsius2kelvin(-56.46);
-    } else if altitude >= 25000.0 && altitude < 85000.0 {
-        return celsius2kelvin(-131.21 + 0.00299 * altitude);
+    if (-57.0..11000.0).contains(&altitude) {
+        celsius2kelvin(15.04 - 0.00649 * altitude)
+    } else if (11000.0..25000.0).contains(&altitude) {
+        celsius2kelvin(-56.46)
+    } else if (25000.0..85000.0).contains(&altitude) {
+        celsius2kelvin(-131.21 + 0.00299 * altitude)
     } else {
         error!(
             "Altitude {:}m is outside of the accepted range! Must be 0-85000m",
             altitude
         );
-        return 0.0;
+        0.0
     }
 }
 
@@ -294,22 +294,22 @@ fn coesa_pressure(altitude: f32) -> f32 {
     // Pressure (Pa) of the atmosphere at a given altitude (m).
     // Only valid for altitudes below 85,000 meters.
     // Based on the US Standard Atmosphere, 1976. (aka COESA)
-    if altitude >= -57.0 && altitude < 11000.0 {
-        return (101.29 * libm::powf(coesa_temperature(altitude) / 288.08, 5.256)) * 1000.0;
-    } else if altitude >= 11000.0 && altitude < 25000.0 {
-        return (22.65 * libm::expf(1.73 - 0.000157 * altitude)) * 1000.0;
-    } else if altitude >= 25000.0 && altitude < 85000.0 {
-        return (2.488 * libm::powf(coesa_temperature(altitude) / 216.6, -11.388)) * 1000.0;
+    if (-57.0..11000.0).contains(&altitude) {
+        (101.29 * libm::powf(coesa_temperature(altitude) / 288.08, 5.256)) * 1000.0
+    } else if (11000.0..25000.0).contains(&altitude) {
+        (22.65 * libm::expf(1.73 - 0.000157 * altitude)) * 1000.0
+    } else if (25000.0..85000.0).contains(&altitude) {
+        (2.488 * libm::powf(coesa_temperature(altitude) / 216.6, -11.388)) * 1000.0
     } else {
         error!(
             "Altitude {:}m is outside of the accepted range! Must be 0-85000m",
             altitude
         );
-        return 0.0;
+        0.0
     }
 }
 
 fn celsius2kelvin(deg_celsius: f32) -> f32 {
     // Convert degrees C to Kelvin
-    return deg_celsius + 273.15
+    deg_celsius + 273.15
 }

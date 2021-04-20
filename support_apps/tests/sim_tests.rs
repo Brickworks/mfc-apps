@@ -1,4 +1,4 @@
-use csv;
+
 
 use std::{fs::File, time::Instant};
 use toml::Value;
@@ -66,7 +66,7 @@ fn test_closed_loop() {
 fn update_control(mngr: &mut ControlMngr, input: &StepInput) -> ControlCommand {
     // pass simulation data to controller as sensor measurements
     let now = Instant::now();
-    return mngr.update(
+    mngr.update(
         Measurement {
             value: input.altitude,
             timestamp: now,
@@ -79,7 +79,7 @@ fn update_control(mngr: &mut ControlMngr, input: &StepInput) -> ControlCommand {
             value: input.ballast_mass,
             timestamp: now,
         },
-    );
+    )
 }
 
 fn init_log_file() -> csv::Writer<File> {
@@ -96,7 +96,7 @@ fn init_log_file() -> csv::Writer<File> {
             "dump_pwm",
         ])
         .unwrap();
-    return writer
+    writer
 }
 
 fn log_to_file(input: &StepInput, writer: &mut csv::Writer<File>) {

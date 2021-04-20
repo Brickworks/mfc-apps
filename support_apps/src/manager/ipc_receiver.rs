@@ -3,12 +3,14 @@ use crate::manager::ipc_receiver::IPCReceiverError::Generic;
 
 /// A structure to store the last received deserialized message for each inbound topic
 /// In the future there will be some methods that assist with setup and receiving.
+#[derive(Debug)]
 pub struct ManagerIPCReceiver {
     alt_ctrl_status: MessageCache<AltCtrlStatus>,
     alt_ctrl_arm: MessageCache<AltCtrlCmd>,
     ground_cmd: MessageCache<GroundCmd>,
 }
 
+#[derive(Debug)]
 pub enum IPCReceiverError {
     Generic,
 }
