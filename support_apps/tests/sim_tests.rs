@@ -91,11 +91,11 @@ fn init_log_file() -> csv::Writer<File> {
             "time",
             "altitude_m",
             "ascent_rate_m_s",
-            "acceleration_m_s2",
-            "lift_gas_mass_kg",
             "ballast_mass_kg",
-            "vent_pwm",
-            "dump_pwm",
+            // "acceleration_m_s2",
+            // "lift_gas_mass_kg",
+            // "vent_pwm",
+            // "dump_pwm",
         ])
         .unwrap();
     writer
@@ -105,11 +105,11 @@ fn log_to_file(sim_output: &SimOutput, writer: &mut csv::Writer<File>) {
     writer
         .write_record(&[
             sim_output.time_s.to_string(),
-            input.altitude.to_string(),
-            input.ascent_rate.to_string(),
+            sim_output.altitude.to_string(),
+            sim_output.ascent_rate.to_string(),
+            sim_output.ballast_mass.to_string(),
             //input.acceleration.to_string(),
             //input.balloon.lift_gas.mass().to_string(),
-            //input.ballast_mass.to_string(),
             //input.vent_pwm.to_string(),
             //input.dump_pwm.to_string(),
         ])
