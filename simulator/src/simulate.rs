@@ -35,7 +35,7 @@ pub struct SimConfig {
     pub dump_mass_flow_rate: f32,
 }
 
-pub fn init(config: Value) -> (StepInput, SimConfig) {
+pub fn init(config: &Value) -> (StepInput, SimConfig) {
     // create an initial time step based on the config
     let balloon_part_id = BalloonType::Hab2000;
     let altitude = config["initial_altitude_m"].as_float().unwrap() as f32;
@@ -83,8 +83,9 @@ pub fn step(input: StepInput, config: &SimConfig) -> StepInput {
     // mass properties -- pretend to open valves as continuous control
     let ballast_mass =
         (input.ballast_mass - (input.dump_pwm * config.dump_mass_flow_rate)).max(0.0);
-    balloon.lift_gas.set_mass(
-        (balloon.lift_gas.mass() - input.vent_pwm * config.vent_mass_flow_rate).max(0.0));
+    balloon
+        .lift_gas
+        .set_mass((balloon.lift_gas.mass() - input.vent_pwm * config.vent_mass_flow_rate).max(0.0));
     let total_dry_mass = config.dry_mass + ballast_mass;
 
     // switch drag conditions
