@@ -1,5 +1,3 @@
-
-
 use std::{fs::File, time::Instant};
 use toml::Value;
 
@@ -7,7 +5,7 @@ use control_apps::{
     control_mngr::{ControlCommand, ControlMngr},
     measurement::Measurement,
 };
-use simulator::{simulate, simulate::StepInput};
+use simulator::{async_sim, simulate, simulate::StepInput, SimOutput, SimCommands};
 
 extern crate pretty_env_logger;
 
@@ -23,7 +21,7 @@ fn test_closed_loop() {
         .as_str()
         .parse::<Value>()
         .unwrap();
-    let (mut input, sim_config) = simulate::init(sim_config_toml);
+    let mut sim = async_sim::AsyncSim::new(sim_config_toml);
 
     // configure controller
     let ctrl_config = std::fs::read_to_string("./config/control_config.toml")
@@ -44,26 +42,30 @@ fn test_closed_loop() {
     // set up data logger
     let mut writer = init_log_file();
 
+    sim.start();
+
     // now iterate until the altitude hits zero or time is too long
-    let mut first_run: bool = true;
-    while (input.time < MAX_SIM_TIME) & (input.altitude > 0.0) {
-        if first_run {
-            // just log the initial condition
-            first_run = false;
-        } else {
-            // propagate the simulation forward by one timestep
-            input = simulate::step(input, &sim_config);
+    loop {
+        let sim_output = sim.get_sim_output();
+
+        // Run for a certain amount of sim time or to a certain altitude
+        if (sim_output.time_s >= MAX_SIM_TIME) || (sim_output.altitude <= 0.0) {
+            break
         }
 
         // get commands and telemetry for the current timestep
-        let cmd = update_control(&mut mngr, &input);
-        input.vent_pwm = cmd.vent_pwm;
-        input.dump_pwm = cmd.dump_pwm;
-        log_to_file(&input, &mut writer);
+        let cmd = update_control(&mut mngr, &sim_output);
+
+        sim.send_commands(SimCommands{
+            vent_flow_percentage: cmd.vent_pwm,
+            dump_flow_percentage: cmd.dump_pwm,
+        });
+
+        log_to_file(&sim_output, &mut writer);
     }
 }
 
-fn update_control(mngr: &mut ControlMngr, input: &StepInput) -> ControlCommand {
+fn update_control(mngr: &mut ControlMngr, input: &SimOutput) -> ControlCommand {
     // pass simulation data to controller as sensor measurements
     let now = Instant::now();
     mngr.update(
@@ -99,17 +101,17 @@ fn init_log_file() -> csv::Writer<File> {
     writer
 }
 
-fn log_to_file(input: &StepInput, writer: &mut csv::Writer<File>) {
+fn log_to_file(sim_output: &SimOutput, writer: &mut csv::Writer<File>) {
     writer
         .write_record(&[
-            input.time.to_string(),
+            sim_output.time_s.to_string(),
             input.altitude.to_string(),
             input.ascent_rate.to_string(),
-            input.acceleration.to_string(),
-            input.balloon.lift_gas.mass().to_string(),
-            input.ballast_mass.to_string(),
-            input.vent_pwm.to_string(),
-            input.dump_pwm.to_string(),
+            //input.acceleration.to_string(),
+            //input.balloon.lift_gas.mass().to_string(),
+            //input.ballast_mass.to_string(),
+            //input.vent_pwm.to_string(),
+            //input.dump_pwm.to_string(),
         ])
         .unwrap();
     writer.flush().unwrap();
