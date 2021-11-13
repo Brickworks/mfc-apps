@@ -41,13 +41,11 @@ fn test_closed_loop() {
 
     // set up data logger
     let mut writer = init_log_file();
-
     sim.start();
 
     // now iterate until the altitude hits zero or time is too long
     loop {
         let sim_output = sim.get_sim_output();
-
         // Run for a certain amount of sim time or to a certain altitude
         if (sim_output.time_s >= MAX_SIM_TIME) || (sim_output.altitude <= 0.0) {
             break
