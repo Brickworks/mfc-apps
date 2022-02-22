@@ -12,3 +12,4 @@ error_ready_threshold_m = 1_000.0
 speed_deadzone_m_s = 0.2
 tlm_max_age_s = 2.0
 min_ballast_kg = 0.01
+ctrl_rate_hz = 1.0

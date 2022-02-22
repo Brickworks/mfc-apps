@@ -5,7 +5,7 @@ import plotly.graph_objects as go
 pio.templates.default = 'plotly_white'
 
 df = pd.read_csv("support_apps/out.csv")
-df = df.set_index('time')
+df = df.set_index('time_s')
 
 fig = make_subplots(rows=len(df.columns), cols=1)
 for colindex, colname in enumerate(df.columns):

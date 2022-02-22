@@ -1,30 +1,28 @@
 use crate::simulate;
-use crate::simulate::step;
 use crate::{SimCommands, SimOutput};
-use std::ops::{Deref, Sub};
+use log::info;
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, SendError, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
+use std::fs::File;
 use toml;
 
-const PHYSICS_RATE_HZ: f32 = 1000.0;
-
-struct Rate {
+pub struct Rate {
     cycle_time: Duration,
     end_of_last_sleep: Option<Instant>,
 }
 
 impl Rate {
-    fn new(rate_hz: f32) -> Self {
+    pub fn new(rate_hz: f32) -> Self {
         Self {
-            cycle_time: Duration::from_secs_f32(0.0 / rate_hz),
+            cycle_time: Duration::from_secs_f32(1.0 / rate_hz),
             end_of_last_sleep: None,
         }
     }
 
-    fn sleep(&mut self) {
+    pub fn sleep(&mut self) {
         let now = Instant::now();
 
         let sleep_duration = match self.end_of_last_sleep {
@@ -96,7 +94,12 @@ impl AsyncSim {
         let mut current_vent_flow_percentage = 0.0;
         let mut current_dump_flow_percentage = 0.0;
 
-        let mut rate_sleeper = Rate::new(PHYSICS_RATE_HZ);
+        let physics_rate = config["physics_rate_hz"].as_float().unwrap() as f32;
+        let mut rate_sleeper = Rate::new(physics_rate);
+
+        // set up data logger
+        let mut writer = init_log_file();
+        info!("Initializing physics engine at {} Hz", physics_rate);
 
         loop {
             rate_sleeper.sleep();
@@ -113,11 +116,49 @@ impl AsyncSim {
             // Sync update all the fields
             {
                 let mut output = sim_output.lock().unwrap();
-                output.altitude = step_input.altitude;
-                output.ballast_mass = step_input.ballast_mass;
-                output.ascent_rate = step_input.ascent_rate;
                 output.time_s = step_input.time;
+                output.altitude = step_input.altitude;
+                output.ascent_rate = step_input.ascent_rate;
+                output.acceleration = step_input.acceleration;
+                output.lift_gas_mass = step_input.balloon.lift_gas.mass();
+                output.ballast_mass = step_input.ballast_mass;
+                output.vent_pwm = step_input.vent_pwm;
+                output.dump_pwm = step_input.dump_pwm;
+                log_to_file(&output, &mut writer);
             }
         }
     }
+}
+
+fn init_log_file() -> csv::Writer<File> {
+    let mut writer = csv::Writer::from_path("./out.csv").unwrap();
+    writer
+        .write_record(&[
+            "time_s",
+            "altitude_m",
+            "ascent_rate_m_s",
+            "acceleration_m_s2",
+            "lift_gas_mass_kg",
+            "ballast_mass_kg",
+            "vent_pwm",
+            "dump_pwm",
+        ])
+        .unwrap();
+    writer
+}
+
+fn log_to_file(sim_output: &SimOutput, writer: &mut csv::Writer<File>) {
+    writer
+        .write_record(&[
+            sim_output.time_s.to_string(),
+            sim_output.altitude.to_string(),
+            sim_output.ascent_rate.to_string(),
+            sim_output.acceleration.to_string(),
+            sim_output.lift_gas_mass.to_string(),
+            sim_output.ballast_mass.to_string(),
+            sim_output.vent_pwm.to_string(),
+            sim_output.dump_pwm.to_string(),
+        ])
+        .unwrap();
+    writer.flush().unwrap();
 }

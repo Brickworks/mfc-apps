@@ -58,7 +58,7 @@ pub fn init(config: &Value) -> (StepInput, SimConfig) {
             dump_pwm: 0.0,
         },
         SimConfig {
-            delta_t: config["time_step_s"].as_float().unwrap() as f32,
+            delta_t: 1.0/config["physics_rate_hz"].as_float().unwrap() as f32,
             dry_mass: config["dry_mass_kg"].as_float().unwrap() as f32,
             lift_gas_species: GasSpecies::Helium,
             box_area: config["box_area_m2"].as_float().unwrap() as f32,
