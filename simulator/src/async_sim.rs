@@ -1,6 +1,5 @@
 use crate::simulate;
 use crate::{SimCommands, SimOutput};
-use log::info;
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, SendError, Sender};
 use std::sync::{Arc, Mutex};
@@ -99,7 +98,6 @@ impl AsyncSim {
 
         // set up data logger
         let mut writer = init_log_file();
-        info!("Initializing physics engine at {} Hz", physics_rate);
 
         loop {
             rate_sleeper.sleep();
