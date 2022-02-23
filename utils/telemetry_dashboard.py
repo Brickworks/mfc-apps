@@ -30,6 +30,10 @@ app.layout = html.Div([
                              'value': 1000
                          },
                          {
+                             'label': '5000 samples',
+                             'value': 5000
+                         },
+                         {
                              'label': '10000 samples',
                              'value': 10000
                          },
@@ -42,24 +46,29 @@ app.layout = html.Div([
         # store the last N data points
         dcc.Store(id='last-n-lines'),
     ]),
-    html.Div([
-        html.Div([
-            # motion
-            dcc.Graph(id='altitude'),
-            dcc.Graph(id='ascent_rate'),
-            dcc.Graph(id='acceleration'),
-        ]),
-        html.Div([
-            # mass properties
-            dcc.Graph(id='lift_gas_mass'),
-            dcc.Graph(id='ballast_mass'),
-        ]),
-        html.Div([
-            # altitude control
-            dcc.Graph(id='vent_pwm'),
-            dcc.Graph(id='dump_pwm'),
-        ])
-    ], style={'display': 'flex', 'flex-direction': 'row'}),
+    html.Div(
+        [
+            html.Div([
+                # motion
+                dcc.Graph(id='altitude'),
+                dcc.Graph(id='ascent_rate'),
+                dcc.Graph(id='acceleration'),
+            ]),
+            html.Div([
+                # vent status
+                dcc.Graph(id='lift_gas_mass'),
+                dcc.Graph(id='vent_pwm'),
+            ]),
+            html.Div([
+                # dump status
+                dcc.Graph(id='ballast_mass'),
+                dcc.Graph(id='dump_pwm'),
+            ])
+        ],
+        style={
+            'display': 'flex',
+            'flex-direction': 'row'
+        }),
 ])
 
 
