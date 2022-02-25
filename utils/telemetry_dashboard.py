@@ -1,54 +1,181 @@
 import io
 
-import dash
+from dash import Dash
+from dash.dependencies import Input, Output
 import dash_core_components as dcc
 import dash_html_components as html
 import pandas as pd
-import tailer as tl
 import plotly.graph_objects as go
-from dash.dependencies import Input, Output
+import tailer as tl
 
+DEFAULT_DATA_CSV = 'support_apps/out.csv'
+DEFAULT_TAIL_LINES = 1000
+PLOT_TEMPLATE = 'plotly_white'
 
-app = dash.Dash(__name__,)
-app.layout = html.Div(
+# -----------------------------------------------------------------------------
+# Page Layout
+# -----------------------------------------------------------------------------
+app = Dash(__name__, )
+app.layout = html.Div([
     html.Div([
-        dcc.Graph(id='live-update-graph'),
+        # dashboard setup
+        dcc.Dropdown(id='tail_lines',
+                     options=[
+                         {
+                             'label': '100 samples',
+                             'value': 100
+                         },
+                         {
+                             'label': '1000 samples',
+                             'value': 1000
+                         },
+                         {
+                             'label': '5000 samples',
+                             'value': 5000
+                         },
+                         {
+                             'label': '10000 samples',
+                             'value': 10000
+                         },
+                     ],
+                     value=1000),
         dcc.Interval(
             id='interval-component',
             interval=1000,  # in milliseconds
-            n_intervals=0)
-    ]))
+            n_intervals=0),
+        # store the last N data points
+        dcc.Store(id='last-n-lines'),
+    ]),
+    html.Div(
+        [
+            html.Div([
+                # motion
+                dcc.Graph(id='altitude'),
+                dcc.Graph(id='ascent_rate'),
+                dcc.Graph(id='acceleration'),
+            ]),
+            html.Div([
+                # vent status
+                dcc.Graph(id='lift_gas_mass'),
+                dcc.Graph(id='vent_pwm'),
+            ]),
+            html.Div([
+                # dump status
+                dcc.Graph(id='ballast_mass'),
+                dcc.Graph(id='dump_pwm'),
+            ])
+        ],
+        style={
+            'display': 'flex',
+            'flex-direction': 'row'
+        }),
+])
 
+
+# -----------------------------------------------------------------------------
+# Components
+# -----------------------------------------------------------------------------
+@app.callback(Output('last-n-lines', 'data'),
+              Input('interval-component', 'n_intervals'),
+              Input('tail_lines', 'value'))
+def get_last_n_lines_from_csv(intervals, n_lines, fname=DEFAULT_DATA_CSV):
+    file = open(fname)
+    lastLines = tl.tail(
+        file, n_lines)  #to read last n lines, change it to any value.
+    file.close()
+    return pd.read_csv(io.StringIO('\n'.join(lastLines)),
+                       header=None,
+                       names=[
+                           'time_s', 'altitude_m', 'ascent_rate_m_s',
+                           'acceleration_m_s2', 'lift_gas_mass_kg',
+                           'ballast_mass_kg', 'vent_pwm', 'dump_pwm'
+                       ]).to_json()
+
+
+def simple_scatter(df, name):
+    fig = go.Figure()
+    fig.update_layout(
+        title=name,
+        xaxis_title='Time (s)',
+        template=PLOT_TEMPLATE,
+    )
+    fig.add_trace(
+        go.Scattergl(x=df['time_s'],
+                    y=df[name],
+                    mode='markers+lines',
+                    name=name))
+    return fig
 
 
 # Multiple components can update everytime interval gets fired.
-@app.callback(Output('live-update-graph', 'figure'),
-              Input('interval-component', 'n_intervals'))
-def update_graph_live(n):
-    fname = "support_apps/out.csv"
-    file = open(fname)
-    lastLines = tl.tail(file,100) #to read last 15 lines, change it  to any value.
-    file.close()
-    df = pd.read_csv(io.StringIO('\n'.join(lastLines)),
-                     header=None,
-                     names=['time',
-                     'altitude_m',
-                     'ascent_rate_m_s',
-                     'acceleration_m_s2',
-                     'lift_gas_mass_kg',
-                     'ballast_mass_kg',
-                     'vent_pwm',
-                     'dump_pwm'])
-    # df = df.set_index('time')
+@app.callback(
+    Output('altitude', 'figure'),
+    Input('interval-component', 'n_intervals'),
+    Input('last-n-lines', 'data'),
+)
+def altitude(interval, data):
+    df = pd.read_json(data)
+    return simple_scatter(df, 'altitude_m')
 
-    fig = go.Figure()
 
-    fig.add_trace(
-        go.Scattergl(x=df['time'],
-                     y=df['altitude_m'],
-                     mode='markers+lines',
-    ))
-    return fig
+@app.callback(
+    Output('ascent_rate', 'figure'),
+    Input('interval-component', 'n_intervals'),
+    Input('last-n-lines', 'data'),
+)
+def ascent_rate(interval, data):
+    df = pd.read_json(data)
+    return simple_scatter(df, 'ascent_rate_m_s')
+
+
+@app.callback(
+    Output('acceleration', 'figure'),
+    Input('interval-component', 'n_intervals'),
+    Input('last-n-lines', 'data'),
+)
+def acceleration(interval, data):
+    df = pd.read_json(data)
+    return simple_scatter(df, 'acceleration_m_s2')
+
+
+@app.callback(
+    Output('lift_gas_mass', 'figure'),
+    Input('interval-component', 'n_intervals'),
+    Input('last-n-lines', 'data'),
+)
+def lift_gas_mass(interval, data):
+    df = pd.read_json(data)
+    return simple_scatter(df, 'lift_gas_mass_kg')
+
+
+@app.callback(
+    Output('ballast_mass', 'figure'),
+    Input('interval-component', 'n_intervals'),
+    Input('last-n-lines', 'data'),
+)
+def ballast_mass(interval, data):
+    df = pd.read_json(data)
+    return simple_scatter(df, 'ballast_mass_kg')
+
+
+@app.callback(
+    Output('vent_pwm', 'figure'),
+    Input('interval-component', 'n_intervals'),
+    Input('last-n-lines', 'data'),
+)
+def vent_pwm(interval, data):
+    df = pd.read_json(data)
+    return simple_scatter(df, 'vent_pwm')
+
+
+@app.callback(
+    Output('dump_pwm', 'figure'),
+    Input('interval-component', 'n_intervals'),
+    Input('last-n-lines', 'data'),
+)
+def dump_pwm(interval, data):
+    df = pd.read_json(data)
+    return simple_scatter(df, 'dump_pwm')
 
 
 if __name__ == '__main__':

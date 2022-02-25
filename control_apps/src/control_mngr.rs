@@ -169,7 +169,7 @@ impl ControlMngr {
         ballast_mass: Measurement<f32>, // ballast mass remining in kg
     ) -> ControlCommand {
         // log status information
-        debug!(
+        info!(
             "[{:}] Altitude {:} m ({:}), Ballast Remaining {:} kg ({:})",
             self.state,
             altitude.value,
@@ -177,9 +177,6 @@ impl ControlMngr {
             ballast_mass.value,
             ballast_mass.timestamp.elapsed().as_secs()
         );
-
-        // abort if there's no ballast left, doesn't matter if tlm is stale
-        self.abort_if_out_of_ballast(ballast_mass.value);
 
         // calculate altitude difference from the target aka altitude error
         let error = altitude.value - self.target_altitude;
@@ -207,6 +204,10 @@ impl ControlMngr {
                 }
             }
             ControlState::Stabilize => {
+                
+                // abort if there's no ballast left, doesn't matter if tlm is stale
+                self.abort_if_out_of_ballast(ballast_mass.value);
+                
                 // switch gains depending on ascent rate
                 if ascent_rate.value > 0.0 {
                     // switch to vent gains

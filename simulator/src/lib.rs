@@ -12,8 +12,12 @@ pub struct SimCommands {
 
 #[derive(Default, Copy, Clone)]
 pub struct SimOutput {
+    pub time_s: f32,
     pub altitude: f32,
     pub ascent_rate: f32,
+    pub acceleration: f32,
     pub ballast_mass: f32,
-    pub time_s: f32,
+    pub lift_gas_mass: f32,
+    pub vent_pwm: f32,
+    pub dump_pwm: f32,
 }
