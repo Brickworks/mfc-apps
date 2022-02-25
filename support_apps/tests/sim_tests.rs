@@ -11,7 +11,6 @@ extern crate pretty_env_logger;
 
 const MAX_SIM_TIME: f32 = 30_000.0; // max number of seconds for a simulation
 
-#[test]
 fn test_closed_loop() {
     pretty_env_logger::init(); // initialize pretty print
 
