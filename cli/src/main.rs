@@ -2,19 +2,33 @@ use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
 
+/*
+    start physics sim   start an asychronous physics simulation
+                        and start writing the results to a csv
+    
+    modify sim param    "god mode" modify a parameter of the
+                        simulation on the fly
+                        - dry mass, ballast mass, gas mass
+                        - position, speed, acceleration
+                        - air temperature, pressure, density
+
+    boot up             start the main execution loop, initialize
+                        the logger and critical apps
+    
+    toggle subsystem    turn on or off an app or hardware system
+                        - control app
+                        - radio
+                        - sensor, GPS, microcontroller
+*/
+
 #[derive(Parser)]
 #[clap(author, version, about, long_about = None)]
 struct Cli {
-    /// Optional name to operate on
     name: Option<String>,
-
-    /// Sets a custom config file
-    #[clap(short, long, parse(from_os_str), value_name = "FILE")]
-    config: Option<PathBuf>,
 
     /// Turn debugging information on
     #[clap(short, long, parse(from_occurrences))]
-    debug: usize,
+    verbose: usize,
 
     #[clap(subcommand)]
     command: Option<Commands>,
@@ -27,6 +41,10 @@ enum Commands {
         /// lists test values
         #[clap(short, long)]
         list: bool,
+
+        /// Sets a custom config file
+        #[clap(short, long, parse(from_os_str), value_name = "FILE")]
+        config: Option<PathBuf>,
     },
 }
 
@@ -38,23 +56,19 @@ fn main() {
         println!("Value for name: {}", name);
     }
 
-    if let Some(config_path) = cli.config.as_deref() {
-        println!("Value for config: {}", config_path.display());
-    }
-
     // You can see how many times a particular flag or argument occurred
     // Note, only flags can have multiple occurrences
-    match cli.debug {
-        0 => println!("Debug mode is off"),
-        1 => println!("Debug mode is kind of on"),
-        2 => println!("Debug mode is on"),
-        _ => println!("Don't be crazy"),
+    match cli.verbose {
+        0 => println!("quiet mode"),
+        1 => println!("verbose mode"),
+        2 => println!("very verbose mode"),
+        _ => println!("can't get any more verbose!"),
     }
 
     // You can check for the existence of subcommands, and if found use their
     // matches just as you would the top level cmd
     match &cli.command {
-        Some(Commands::Test { list }) => {
+        Some(Commands::Test { list, config }) => {
             if *list {
                 println!("Printing testing lists...");
             } else {
