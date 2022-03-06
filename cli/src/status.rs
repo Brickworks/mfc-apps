@@ -1,4 +1,4 @@
-use log::{trace, debug, info, warn, error};
+use log::{debug, info, warn, error};
 use sysinfo::{ComponentExt, NetworkExt, NetworksExt, ProcessExt, System, SystemExt};
 
 enum LogLevel {
@@ -21,16 +21,16 @@ fn print_report(messages: Vec<ReportMessage>) {
     for msg in &messages {
         match &msg.level {
             LogLevel::Debug => {
-                debug!("{:#?}", &msg.content)
+                debug!("{}", &msg.content)
             }
             LogLevel::Info => {
-                info!("{:#?}", &msg.content)
+                info!("{}", &msg.content)
             },
             LogLevel::Warn => {
-                warn!("{:#?}", &msg.content)
+                warn!("{}", &msg.content)
             },
             _ => {
-                error!("{:#?}", &msg.content)
+                error!("{}", &msg.content)
             }
         }
     }
@@ -48,27 +48,52 @@ fn sys_report() -> Vec<ReportMessage> {
     sys.refresh_all();
 
     // Display system information:
+    let system_info = [
+        ("System host name:        ", sys.host_name()),
+        ("System name:             ", sys.name()),
+        ("System kernel version:   ", sys.kernel_version()),
+        ("System OS version:       ", sys.os_version()),
+    ];
+    for info in system_info {
+        let infoval = match info.1 {
+            None => String::from("unknown"),
+            Some(ref val) => String::from(val),
+        };
+        msgs.push(ReportMessage{
+            level: LogLevel::Info,
+            content: format!("{} {}", info.0, infoval),
+        });
+    }
     msgs.push(ReportMessage{
         level: LogLevel::Info,
-        content: format!("System name:             {:?}", sys.name()),
+        content: format!("Uptime (s):               {}", sys.uptime()),
     });
     msgs.push(ReportMessage{
         level: LogLevel::Info,
-        content: format!("System kernel version:   {:?}", sys.kernel_version()),
+        content: format!("Last boot (unix time):    {}", sys.boot_time()),
     });
+
+    // average cpu load
+    let cpu_load_avg = sys.load_average();
+    let msg_level = match cpu_load_avg.five {
+        pct if pct >= 80.0 => LogLevel::Error,
+        pct if pct >= 50.0 => LogLevel::Warn,
+        _ => LogLevel::Info,
+    };
     msgs.push(ReportMessage{
-        level: LogLevel::Info,
-        content: format!("System OS version:       {:?}", sys.os_version()),
+        level: msg_level,
+        content: format!(
+            "Avg. CPU load: [1 min] {}% | [5 min] {}% | [15 min] {}%",
+            cpu_load_avg.one,
+            cpu_load_avg.five,
+            cpu_load_avg.fifteen,
+        ),
     });
-    msgs.push(ReportMessage{
-        level: LogLevel::Info,
-        content: format!("System host name:        {:?}", sys.host_name()),
-    });
-        
+
     // Then let's print the temperature of the different components:
     for component in sys.components() {
         let msg_content = format!("Temperaure of {:?}", &component);
-        let critical_temp = component.critical().unwrap_or(1.5*component.max());
+        let critical_temp: f32 = 90.0;
         let msg_level = match component.temperature() {
             t if t >= critical_temp => LogLevel::Error,
             t if t >= 0.8 * component.max() => LogLevel::Warn,
@@ -82,24 +107,16 @@ fn sys_report() -> Vec<ReportMessage> {
             Some(ref critical_temp) => {
                 ReportMessage{
                     level: LogLevel::Debug,
-                    content: format!("Detected critical temp for {:}: {:?}", component.label(), critical_temp),
+                    content: format!("Detected critical temp for {:}: {:?}C", component.label(), critical_temp),
                 }},
             None => {
                 ReportMessage{
                     level: LogLevel::Debug,
-                    content: format!("Estimated critical temp for {:}: {:?}", component.label(), 1.5*component.max()),
+                    content: format!("Estimated critical temp for {:}: {:?}C", component.label(), critical_temp),
                 }},
             });
     }
-    
-    // And then all disks' information:
-    for disk in sys.disks() {
-        msgs.push(ReportMessage{
-            level: LogLevel::Info,
-            content: format!("{:?}", disk),
-        });
-    }
-    
+
     // And finally the RAM and SWAP information:
     msgs.push(ReportMessage{
         level: LogLevel::Info,
