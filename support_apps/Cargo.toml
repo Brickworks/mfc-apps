@@ -10,9 +10,9 @@ edition = "2018"
 
 [dependencies]
 toml = "0.5"
-nng = "0.5.1"
+nng = "1.0.0"
 rmp = "0.8.9"
-rmp-serde = "0.14.4"
+rmp-serde = "1.0.0"
 control_apps = {path = "../control_apps"}
 simulator = {path = "../simulator"}
 
