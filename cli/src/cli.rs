@@ -14,15 +14,22 @@ struct Cli {
 
 #[derive(Subcommand, Debug)]
 enum Commands {
-    /// generate a system status report
+    /// Generate a system status report
     Status {},
 
-    /// configure and run a simulation
+    /// Configure and run a simulation
     ///
     /// Configure an asynchronous physics simulation in the background. This
     /// simulation runs on the MFC with flight software code running in the
     /// loop and logs the simulation output to a CSV file.
     Sim {
+        /// Sets a custom simulation config file
+        #[clap(short, long, parse(from_os_str), value_name = "FILE")]
+        sim_config: Option<PathBuf>,
+    },
+
+    /// Initiate flight sequence
+    FlightReady {
         /// Sets a custom config file
         #[clap(short, long, parse(from_os_str), value_name = "FILE")]
         config: Option<PathBuf>,
