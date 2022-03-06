@@ -20,4 +20,6 @@ pub struct SimOutput {
     pub lift_gas_mass: f32,
     pub vent_pwm: f32,
     pub dump_pwm: f32,
+    pub gross_lift: f32,
+    pub free_lift: f32,
 }

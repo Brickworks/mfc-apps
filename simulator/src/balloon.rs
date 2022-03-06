@@ -20,7 +20,6 @@ pub enum BalloonType {
 
 #[derive(Copy, Clone)]
 pub struct Balloon {
-    part_no: BalloonType,
     pub lift_gas: gas::GasVolume,
     pub mass: f32, // balloon mass
     pub max_volume: f32, // burst above this volume
@@ -34,7 +33,6 @@ impl Balloon {
         match part_no {
             BalloonType::Hab800 => {
                 Balloon {
-                    part_no,
                     lift_gas,
                     mass: 0.8,
                     max_volume: volume_from_diameter(7.0),
@@ -45,7 +43,6 @@ impl Balloon {
             },
             BalloonType::Hab1200 => {
                 Balloon {
-                    part_no,
                     lift_gas,
                     mass: 1.2,
                     max_volume: volume_from_diameter(8.63),
@@ -56,7 +53,6 @@ impl Balloon {
             },
             BalloonType::Hab1500 => {
                 Balloon {
-                    part_no,
                     lift_gas,
                     mass: 1.5,
                     max_volume: volume_from_diameter(9.44),
@@ -67,7 +63,6 @@ impl Balloon {
             },
             BalloonType::Hab2000 => {
                 Balloon {
-                    part_no,
                     lift_gas,
                     mass: 2.0,
                     max_volume: volume_from_diameter(10.54),
@@ -78,7 +73,6 @@ impl Balloon {
             },
             BalloonType::Hab3000 => {
                 Balloon {
-                    part_no,
                     lift_gas,
                     mass: 3.0,
                     max_volume: volume_from_diameter(13.0),
