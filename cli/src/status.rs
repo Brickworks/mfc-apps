@@ -1,5 +1,5 @@
 use log::{debug, info, warn, error};
-use sysinfo::{ComponentExt, NetworkExt, NetworksExt, ProcessExt, System, SystemExt};
+use sysinfo::{ComponentExt, System, SystemExt};
 
 enum LogLevel {
     Debug,
@@ -83,7 +83,7 @@ fn sys_report() -> Vec<ReportMessage> {
     msgs.push(ReportMessage{
         level: msg_level,
         content: format!(
-            "Avg. CPU load: [1 min] {}% | [5 min] {}% | [15 min] {}%",
+            "Avg. CPU load: [1 min] {:.3}% | [5 min] {:.3}% | [15 min] {:.3}%",
             cpu_load_avg.one,
             cpu_load_avg.five,
             cpu_load_avg.fifteen,
@@ -107,12 +107,12 @@ fn sys_report() -> Vec<ReportMessage> {
             Some(ref critical_temp) => {
                 ReportMessage{
                     level: LogLevel::Debug,
-                    content: format!("Detected critical temp for {:}: {:?}C", component.label(), critical_temp),
+                    content: format!("Detected critical temp for {:}: {:}C", component.label(), critical_temp),
                 }},
             None => {
                 ReportMessage{
                     level: LogLevel::Debug,
-                    content: format!("Estimated critical temp for {:}: {:?}C", component.label(), critical_temp),
+                    content: format!("Estimated critical temp for {:}: {:}C", component.label(), critical_temp),
                 }},
             });
     }

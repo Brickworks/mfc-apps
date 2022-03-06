@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
-use log::{trace, debug, info, warn, error};
+use log::{error};
 
 use crate::status;
 
@@ -14,7 +14,7 @@ struct Cli {
 
 #[derive(Subcommand, Debug)]
 enum Commands {
-    /// generate a status report
+    /// generate a system status report
     Status {},
 
     /// configure and run a simulation
