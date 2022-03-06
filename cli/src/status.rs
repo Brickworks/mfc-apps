@@ -47,11 +47,24 @@ fn sys_report() -> Vec<ReportMessage> {
     // First we update all information of our `System` struct.
     sys.refresh_all();
 
-    // // Now let's print every process' id and name:
-    // for (pid, proc_) in system.get_process_list() {
-    //     println!("{}:{} => status: {:?}", pid, proc_.name, proc_.status);
-    // }
-    
+    // Display system information:
+    msgs.push(ReportMessage{
+        level: LogLevel::Info,
+        content: format!("System name:             {:?}", sys.name()),
+    });
+    msgs.push(ReportMessage{
+        level: LogLevel::Info,
+        content: format!("System kernel version:   {:?}", sys.kernel_version()),
+    });
+    msgs.push(ReportMessage{
+        level: LogLevel::Info,
+        content: format!("System OS version:       {:?}", sys.os_version()),
+    });
+    msgs.push(ReportMessage{
+        level: LogLevel::Info,
+        content: format!("System host name:        {:?}", sys.host_name()),
+    });
+        
     // Then let's print the temperature of the different components:
     for component in sys.components() {
         let msg_content = format!("Temperaure of {:?}", &component);
