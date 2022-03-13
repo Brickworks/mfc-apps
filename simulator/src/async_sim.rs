@@ -1,5 +1,6 @@
 use crate::simulate;
 use crate::{SimCommands, SimOutput};
+use std::path::PathBuf;
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, SendError, Sender};
 use std::sync::{Arc, Mutex};
@@ -43,16 +44,18 @@ impl Rate {
 pub struct AsyncSim {
     config: toml::Value,
     sim_output: Arc<Mutex<SimOutput>>,
+    outpath: PathBuf,
     command_sender: Option<Sender<SimCommands>>,
     /// keep track of
     run_handle: Option<JoinHandle<()>>,
 }
 
 impl AsyncSim {
-    pub fn new(config: toml::Value) -> Self {
+    pub fn new(config: toml::Value, outpath: PathBuf) -> Self {
         Self {
             config,
             sim_output: Arc::new(Mutex::new(SimOutput::default())),
+            outpath: outpath,
             command_sender: None,
             run_handle: None,
         }
@@ -74,12 +77,13 @@ impl AsyncSim {
 
         let config = self.config.clone();
         let output = self.sim_output.clone();
+        let outpath = self.outpath.clone();
 
         let (s, command_receiver) = mpsc::channel();
         self.command_sender = Some(s);
 
         self.run_handle = Some(std::thread::spawn(move || {
-            AsyncSim::run_sim(config, command_receiver, output)
+            AsyncSim::run_sim(config, command_receiver, output, outpath)
         }));
     }
 
@@ -87,6 +91,7 @@ impl AsyncSim {
         config: toml::Value,
         command_channel: Receiver<SimCommands>,
         sim_output: Arc<Mutex<SimOutput>>,
+        outpath: PathBuf,
     ) {
         let (mut step_input, step_config) = simulate::init(&config);
 
@@ -97,7 +102,7 @@ impl AsyncSim {
         let mut rate_sleeper = Rate::new(physics_rate);
 
         // set up data logger
-        let mut writer = init_log_file();
+        let mut writer = init_log_file(outpath);
 
         loop {
             rate_sleeper.sleep();
@@ -128,8 +133,8 @@ impl AsyncSim {
     }
 }
 
-fn init_log_file() -> csv::Writer<File> {
-    let mut writer = csv::Writer::from_path("./out.csv").unwrap();
+fn init_log_file(outpath: PathBuf) -> csv::Writer<File> {
+    let mut writer = csv::Writer::from_path(outpath).unwrap();
     writer
         .write_record(&[
             "time_s",
