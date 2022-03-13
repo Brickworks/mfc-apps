@@ -5,9 +5,9 @@
 // ----------------------------------------------------------------------------
 
 use std::fmt;
-use std::thread::sleep; // only used to emulate some sort of POST
 use std::time::Duration;
 
+use bitflags::bitflags;
 use log::{debug, info, warn};
 
 use crate::measurement::Measurement;
@@ -15,7 +15,6 @@ use crate::controller::Controller;
 use crate::controller::Valve;
 use pid::Pid;
 
-const POST_DELAY_MS: u64 = 1000; // bogus delay to emulate POST operations
 const CTRL_ALTITUDE_FLOOR: f32 = 15000.0; // minimum allowed altitude in meters
 const CTRL_ERROR_DEADZONE: f32 = 100.0; // magnitude of margin to allow without actuation
 const CTRL_ERROR_READY_THRESHOLD: f32 = 1000.0; // basically opposite of deadzone
@@ -42,6 +41,17 @@ impl fmt::Display for ControlState {
             ControlState::Safe => write!(f, "Safe"),
             ControlState::Abort => write!(f, "Abort"),
         }
+    }
+}
+
+bitflags! {
+    #[derive(Default)]
+    struct ControlInhibitors: u32 {
+        const ControlOK        = 0b0000_0000;
+        const StaleTelemetry   = 0b0000_0001;
+        const ValveDeadzone    = 0b0000_0010;
+        const AltitudeDeadzone = 0b0000_0100;
+        const SpeedDeadzone    = 0b0000_1000;
     }
 }
 
@@ -128,7 +138,7 @@ impl ControlMngr {
         info!("Starting Power-On Self Test...");
         // PLACEHOLDER: hard-coded wait to check.
         // In the future this will wait for real hardware and software checks
-        sleep(Duration::from_millis(POST_DELAY_MS));
+        debug!("(the POST is a placeholder for now)");
         info!("POST complete!");
         // when POST is complete, transition from idle to safe
         self.state = ControlState::Ready
@@ -137,29 +147,18 @@ impl ControlMngr {
     fn abort_if_out_of_ballast(&mut self, ballast_mass: f32) {
         if ballast_mass <= CTRL_MIN_BALLAST {
             // abort if there is no ballast left
-            warn!("Not enough ballast mass! Ballast mass: {:}kg", ballast_mass);
+            warn!("Ballast mass is {:} kg which is below the minimum {} kg --> Abort!", ballast_mass, CTRL_MIN_BALLAST);
             self.state = ControlState::Abort
         } // otherwise carry on
     }
 
-    fn allow_control(&self, ctrl_inhibitor_mask: u8) -> bool {
-        // check bitmask of control inhibitor conditions
-        // - not allowed to control if in both deadzones
-        // - of if telemetry is stale
-        // bitmask key:
-        // 1    ascent rate telemetry is stale
-        // 2    altitude telemetry is stale
-        // 3    within ascent rate deadzone
-        // 4    within altitude deadzone
-        // allow: 0000, 1000, 0100
-        // TODO: refactor this to use bitflags
-        let control_allowed: bool = match ctrl_inhibitor_mask {
-            0b0000_0000 => true,
-            0b0000_1000 => true,
-            0b0000_0100 => true,
-            _ => false,
-        };
-        return control_allowed
+    fn allow_control(&mut self, inhibitor_mask: ControlInhibitors) -> bool {
+        return
+            !inhibitor_mask.contains(ControlInhibitors::StaleTelemetry) &
+            !inhibitor_mask.contains(ControlInhibitors::ValveDeadzone) &
+            !(
+                inhibitor_mask.intersects(ControlInhibitors::AltitudeDeadzone & ControlInhibitors::SpeedDeadzone)
+            )
     }
 
     pub fn update(
@@ -168,16 +167,6 @@ impl ControlMngr {
         ascent_rate: Measurement<f32>,  // instantaneous ascent rate in m/s
         ballast_mass: Measurement<f32>, // ballast mass remining in kg
     ) -> ControlCommand {
-        // log status information
-        info!(
-            "[{:}] Altitude {:} m ({:}), Ballast Remaining {:} kg ({:})",
-            self.state,
-            altitude.value,
-            altitude.timestamp.elapsed().as_secs(),
-            ballast_mass.value,
-            ballast_mass.timestamp.elapsed().as_secs()
-        );
-
         // calculate altitude difference from the target aka altitude error
         let error = altitude.value - self.target_altitude;
 
@@ -189,12 +178,17 @@ impl ControlMngr {
                 self.power_on_self_test()
             }
             ControlState::Ready => {
+                // log status information
+                info!(
+                    "[{}] Distance from target altitude: {} m",
+                    self.state, error.abs()
+                );
                 // lets do this!
                 if !(altitude.value <= CTRL_ALTITUDE_FLOOR)
                     && error.abs() <= CTRL_ERROR_READY_THRESHOLD
                 {
                     info!(
-                        "{:}m is close enough to target {:}m --> Stabilize!",
+                        "{} m is close enough to target {} m --> Stabilize!",
                         altitude.value, self.target_altitude
                     );
                     self.state = ControlState::Stabilize;
@@ -229,72 +223,76 @@ impl ControlMngr {
                     altitude.value);
                 // decide what to do in order to converge toward the target
                 if altitude.value > CTRL_ALTITUDE_FLOOR {
+                    let mut vent_pwm = self.vent_valve.ctrl2pwm(control_effort);
+                    let mut dump_pwm = self.dump_valve.ctrl2pwm(control_effort);
+
                     // configure registers for reasons to not actuate
-                    let mut ctrl_inhibitor_mask: u8 = 0b0000_0000;
+                    let mut ctrl_inhibitor_mask = ControlInhibitors::ControlOK;
+                    let control_action: &str;
                     if error.abs() < CTRL_ERROR_DEADZONE {
                         // altitude error is within the deadzone
-                        ctrl_inhibitor_mask ^= 0b0000_1000;
+                        debug!("Altitude error is {}, which is within the deadzone of {}",
+                                error.abs(), CTRL_ERROR_DEADZONE);
+                        ctrl_inhibitor_mask.set(ControlInhibitors::AltitudeDeadzone,true)
                     }
                     if ascent_rate.value.abs() < CTRL_SPEED_DEADZONE {
                         // ascent rate is within the deadzone
-                        ctrl_inhibitor_mask ^= 0b0000_0100;
+                        debug!("Ascent Rate is {}, which is within the deadzone of {}",
+                                ascent_rate.value.abs(), CTRL_SPEED_DEADZONE);
+                        ctrl_inhibitor_mask.set(ControlInhibitors::SpeedDeadzone,true)
                     }
                     if is_stale(&altitude, CTRL_TLM_MAX_AGE) {
                         // altitude telemetry is stale
-                        ctrl_inhibitor_mask ^= 0b0000_0010;
+                        warn!("Altitude telemetry is stale! ({:#?} s old)", &altitude.timestamp.elapsed());
+                        ctrl_inhibitor_mask.set(ControlInhibitors::StaleTelemetry,true)
                     }
                     if is_stale(&ascent_rate, CTRL_TLM_MAX_AGE) {
                         // ascent rate telemetry is stale
-                        ctrl_inhibitor_mask ^= 0b0000_0001;
+                        warn!("Ascent Rate telemetry is stale! ({:#?} s old)", &ascent_rate.timestamp.elapsed());
+                        ctrl_inhibitor_mask.set(ControlInhibitors::StaleTelemetry,true)
                     }
-
+                    if (vent_pwm <= 0.001) & (dump_pwm <= 0.001) {
+                        ctrl_inhibitor_mask.set(ControlInhibitors::ValveDeadzone,true)
+                    }
                     // decide if/how to actuate valves
                     if self.allow_control(ctrl_inhibitor_mask) {
                         if ascent_rate.value > 0.0 {
                             // lower altitude for error to converge to zero
                             // set the vent PWM to whatever the controller says
-                            self.vent_valve.set_pwm(
-                                self.vent_valve.ctrl2pwm(control_effort)
-                            );
                             // close the dump valve
-                            self.dump_valve.set_pwm(0.0);
-                            debug!(
-                                "[{:}] Venting at {:}%",
-                                self.state,
-                                self.vent_valve.get_pwm() * 100.0
-                            );
+                            dump_pwm = 0.0;
+                            control_action = "Venting";
                         } else {
                             // raise altitude for error to converge to zero
-                            // close the vent valve
-                            self.vent_valve.set_pwm(0.0);
                             // set the vent PWM to whatever the controller says
-                            self.dump_valve.set_pwm(
-                                self.dump_valve.ctrl2pwm(control_effort)
-                            );
-                            debug!(
-                                "[{:}] Dumping at {:}%",
-                                self.state,
-                                self.dump_valve.get_pwm() * 100.0
-                            );
+                            // close the vent valve
+                            vent_pwm = 0.0;
+                            control_action = "Dumping";
                         };
                     } else {
                         // if in dead zone or telemetry is stale, do nothing
                         // close the vent valve
-                        self.vent_valve.set_pwm(0.0);
+                        vent_pwm = 0.0;
                         // close the dump valve
-                        self.dump_valve.set_pwm(0.0);
-                        debug!(
-                            "[{:}] Controller idle. Reason: {:#04b}",
-                            self.state,
-                            ctrl_inhibitor_mask
-                        );
+                        dump_pwm = 0.0;
+                        control_action = "Idling ";
                         // reset the controller to avoid accumulated error
                         self.controller.reset_integral();
                     };
+                    self.vent_valve.set_pwm(vent_pwm);
+                    self.dump_valve.set_pwm(dump_pwm);
+                    info!(
+                        "[{}] {:#?} {} (Vent {:0.2} % | Dump {:0.2} % )",
+                        self.state,
+                        ctrl_inhibitor_mask,
+                        control_action,
+                        vent_pwm * 100.0,
+                        dump_pwm * 100.0,
+                    );
                 } else {
                     // abort if altitude is lower than the lowest allowed value
                     warn!(
-                        "{:}m lower than minimum {:}m --> Abort!",
+                        "{} m lower than minimum {} m --> Abort!",
                         altitude.value, CTRL_ALTITUDE_FLOOR
                     );
                     self.state = ControlState::Abort;

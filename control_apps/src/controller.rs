@@ -53,8 +53,8 @@ impl Controller {
 pub struct Valve {
     // Altitude control mass flow control valve
     pwm: f32,      // instantaneous PWM setting [0, 1]
-    min_ctrl: f32, // control effort upper limit
-    max_ctrl: f32, // control effort upper limit
+    pub min_ctrl: f32, // control effort upper limit
+    pub max_ctrl: f32, // control effort upper limit
     pub kp: f32,   // valve controller proportional gain
     pub ki: f32,   // valve controller integral gain
     pub kd: f32,   // valve controller derivatitve gain
