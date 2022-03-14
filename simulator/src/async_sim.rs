@@ -1,7 +1,7 @@
 use crate::simulate;
 use crate::{SimCommands, SimOutput};
 use std::sync::mpsc;
-use std::sync::mpsc::{Receiver, SendError, Sender};
+use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
@@ -140,6 +140,8 @@ fn init_log_file() -> csv::Writer<File> {
             "ballast_mass_kg",
             "vent_pwm",
             "dump_pwm",
+            "gross_lift_N",
+            "free_lift_N",
         ])
         .unwrap();
     writer
@@ -156,6 +158,8 @@ fn log_to_file(sim_output: &SimOutput, writer: &mut csv::Writer<File>) {
             sim_output.ballast_mass.to_string(),
             sim_output.vent_pwm.to_string(),
             sim_output.dump_pwm.to_string(),
+            sim_output.gross_lift.to_string(),
+            sim_output.free_lift.to_string(),
         ])
         .unwrap();
     writer.flush().unwrap();

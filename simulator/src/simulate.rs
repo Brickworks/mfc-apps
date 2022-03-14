@@ -4,12 +4,12 @@
 // Coordinate execution of a discrete-time simulation.
 // ----------------------------------------------------------------------------
 use crate::balloon::{Balloon, BalloonType};
-use crate::force;
+use crate::force::{sphere_area_from_volume, net_force, gross_lift, free_lift};
 use crate::gas::{Atmosphere, GasSpecies, GasVolume};
 
 use toml::Value;
 
-pub struct StepInput {
+pub struct SimInstant {
     pub time: f32,
     pub altitude: f32,
     pub ascent_rate: f32,
@@ -19,6 +19,8 @@ pub struct StepInput {
     pub ballast_mass: f32,
     pub vent_pwm: f32,
     pub dump_pwm: f32,
+    pub gross_lift: f32,
+    pub free_lift: f32,
 }
 
 pub struct SimConfig {
@@ -35,7 +37,7 @@ pub struct SimConfig {
     pub dump_mass_flow_rate: f32,
 }
 
-pub fn init(config: &Value) -> (StepInput, SimConfig) {
+pub fn init(config: &Value) -> (SimInstant, SimConfig) {
     // create an initial time step based on the config
     let balloon_part_id = BalloonType::Hab2000;
     let altitude = config["initial_altitude_m"].as_float().unwrap() as f32;
@@ -45,21 +47,26 @@ pub fn init(config: &Value) -> (StepInput, SimConfig) {
         config["lift_gas_mass_kg"].as_float().unwrap() as f32,
     );
     let balloon = Balloon::new(balloon_part_id, gas);
+    let dry_mass = config["dry_mass_kg"].as_float().unwrap() as f32;
+    let initial_ballast_mass = config["ballast_mass_kg"].as_float().unwrap() as f32;
+    let total_dry_mass = dry_mass + initial_ballast_mass;
     (
-        StepInput {
+        SimInstant {
             time: 0.0,
             altitude: config["initial_altitude_m"].as_float().unwrap() as f32,
             ascent_rate: config["initial_velocity_m_s"].as_float().unwrap() as f32,
             acceleration: 0.0,
             atmosphere: atmo,
             balloon,
-            ballast_mass: config["ballast_mass_kg"].as_float().unwrap() as f32,
+            ballast_mass: initial_ballast_mass,
             vent_pwm: 0.0,
             dump_pwm: 0.0,
+            gross_lift: gross_lift(atmo, gas),
+            free_lift: free_lift(atmo, gas, total_dry_mass),
         },
         SimConfig {
             delta_t: 1.0/config["physics_rate_hz"].as_float().unwrap() as f32,
-            dry_mass: config["dry_mass_kg"].as_float().unwrap() as f32,
+            dry_mass: dry_mass,
             lift_gas_species: GasSpecies::Helium,
             box_area: config["box_area_m2"].as_float().unwrap() as f32,
             box_drag_coeff: config["box_drag_coeff"].as_float().unwrap() as f32,
@@ -73,7 +80,7 @@ pub fn init(config: &Value) -> (StepInput, SimConfig) {
     )
 }
 
-pub fn step(input: StepInput, config: &SimConfig) -> StepInput {
+pub fn step(input: SimInstant, config: &SimConfig) -> SimInstant {
     // propagate the closed loop simulation forward by one time step
     let time = input.time + config.delta_t;
     let mut atmosphere = input.atmosphere;
@@ -94,7 +101,7 @@ pub fn step(input: StepInput, config: &SimConfig) -> StepInput {
     balloon.check_burst_condition(); // has the balloon popped?
     if balloon.intact {
         // balloon is intact
-        projected_area = force::sphere_area_from_volume(balloon.lift_gas.volume());
+        projected_area = sphere_area_from_volume(balloon.lift_gas.volume());
         drag_coeff = balloon.drag_coeff;
     } else {
         // balloon has popped
@@ -110,7 +117,7 @@ pub fn step(input: StepInput, config: &SimConfig) -> StepInput {
     }
 
     // calculate the net force
-    let net_force = force::net_force(
+    let net_force = net_force(
         input.altitude,
         input.ascent_rate,
         atmosphere,
@@ -130,7 +137,11 @@ pub fn step(input: StepInput, config: &SimConfig) -> StepInput {
     let vent_pwm = input.vent_pwm;
     let dump_pwm = input.dump_pwm;
 
-    StepInput {
+    // derived outputs
+    let gross_lift = gross_lift(atmosphere, balloon.lift_gas);
+    let free_lift = free_lift(atmosphere, balloon.lift_gas, total_dry_mass);
+
+    SimInstant {
         time,
         altitude,
         ascent_rate,
@@ -140,5 +151,7 @@ pub fn step(input: StepInput, config: &SimConfig) -> StepInput {
         ballast_mass,
         vent_pwm,
         dump_pwm,
+        gross_lift,
+        free_lift,
     }
 }
