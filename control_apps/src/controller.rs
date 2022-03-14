@@ -53,11 +53,13 @@ impl Controller {
 pub struct Valve {
     // Altitude control mass flow control valve
     pwm: f32,      // instantaneous PWM setting [0, 1]
-    pub min_ctrl: f32, // control effort upper limit
-    pub max_ctrl: f32, // control effort upper limit
+    min_ctrl: f32, // control effort upper limit
+    max_ctrl: f32, // control effort upper limit
     pub kp: f32,   // valve controller proportional gain
     pub ki: f32,   // valve controller integral gain
     pub kd: f32,   // valve controller derivatitve gain
+    pub saturated: bool, // whether the valve is at its max value
+    pub deadzoned: bool, // whether the valve is in its dead zone
 }
 
 impl Valve {
@@ -69,6 +71,8 @@ impl Valve {
             kp,       // valve controller proportional gain
             ki,       // valve controller integral gain
             kd,       // valve controller derivatitve gain
+            saturated: false, // whether the valve is at its max value
+            deadzoned: false,  // whether the valve is in its dead zone
         }
     }
 
@@ -81,9 +85,11 @@ impl Valve {
                 "Clamping PWM {:} to {:}",
                 pwm_value,
                 clamp(pwm_value, 0.0, 1.0)
-            );
-            self.pwm = clamp(pwm_value, 0.0, 1.0);
+            )
         }
+        self.pwm = clamp(pwm_value, 0.0, 1.0);
+        self.deadzoned = self.pwm == 0.0;
+        self.saturated = self.pwm == 1.0;
     }
 
     pub fn get_pwm(&self) -> f32 {
@@ -93,9 +99,9 @@ impl Valve {
 
     pub fn ctrl2pwm(&self, control_effort: f32) -> f32 {
         // translate control effort to PWM
-        let new_pwm = clamp(control_effort, self.min_ctrl, self.max_ctrl).abs();
-        debug!("PID effort: {:} | PWM {:}", control_effort, new_pwm);
-        return new_pwm;
+        let new_pwm = clamp(control_effort, self.min_ctrl, self.max_ctrl);
+        debug!("PID effort: {:} | PWM {:}", control_effort, new_pwm.abs());
+        return new_pwm.abs();
     }
 }
 

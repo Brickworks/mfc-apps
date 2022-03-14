@@ -10,9 +10,9 @@ use std::time::Duration;
 use bitflags::bitflags;
 use log::{debug, info, warn};
 
-use crate::measurement::Measurement;
 use crate::controller::Controller;
 use crate::controller::Valve;
+use crate::measurement::Measurement;
 use pid::Pid;
 
 const CTRL_ALTITUDE_FLOOR: f32 = 15000.0; // minimum allowed altitude in meters
@@ -47,11 +47,12 @@ impl fmt::Display for ControlState {
 bitflags! {
     #[derive(Default)]
     struct ControlInhibitors: u32 {
-        const ControlOK        = 0b0000_0000;
-        const StaleTelemetry   = 0b0000_0001;
-        const ValveDeadzone    = 0b0000_0010;
-        const AltitudeDeadzone = 0b0000_0100;
-        const SpeedDeadzone    = 0b0000_1000;
+        const NONE              = 0b0000_0000;
+        const DUMP_DEADZONE     = 0b0000_0001;
+        const VENT_DEADZONE     = 0b0000_0010;
+        const ALTITUDE_DEADZONE = 0b0000_0100;
+        const SPEED_DEADZONE    = 0b0000_1000;
+        const STALE_TELEMETRY   = 0b0001_0000;
     }
 }
 
@@ -147,18 +148,12 @@ impl ControlMngr {
     fn abort_if_out_of_ballast(&mut self, ballast_mass: f32) {
         if ballast_mass <= CTRL_MIN_BALLAST {
             // abort if there is no ballast left
-            warn!("Ballast mass is {:} kg which is below the minimum {} kg --> Abort!", ballast_mass, CTRL_MIN_BALLAST);
+            warn!(
+                "Ballast mass is {:} kg which is below the minimum {} kg --> Abort!",
+                ballast_mass, CTRL_MIN_BALLAST
+            );
             self.state = ControlState::Abort
         } // otherwise carry on
-    }
-
-    fn allow_control(&mut self, inhibitor_mask: ControlInhibitors) -> bool {
-        return
-            !inhibitor_mask.contains(ControlInhibitors::StaleTelemetry) &
-            !inhibitor_mask.contains(ControlInhibitors::ValveDeadzone) &
-            !(
-                inhibitor_mask.intersects(ControlInhibitors::AltitudeDeadzone & ControlInhibitors::SpeedDeadzone)
-            )
     }
 
     pub fn update(
@@ -181,7 +176,8 @@ impl ControlMngr {
                 // log status information
                 info!(
                     "[{}] Distance from target altitude: {} m",
-                    self.state, error.abs()
+                    self.state,
+                    error.abs()
                 );
                 // lets do this!
                 if !(altitude.value <= CTRL_ALTITUDE_FLOOR)
@@ -198,96 +194,107 @@ impl ControlMngr {
                 }
             }
             ControlState::Stabilize => {
-                
                 // abort if there's no ballast left, doesn't matter if tlm is stale
                 self.abort_if_out_of_ballast(ballast_mass.value);
-                
+
                 // switch gains depending on ascent rate
                 if ascent_rate.value > 0.0 {
                     // switch to vent gains
                     self.controller.set_gains(
                         self.vent_valve.kp,
                         self.vent_valve.ki,
-                        self.vent_valve.kd
+                        self.vent_valve.kd,
                     );
                 } else {
                     // switch to dump gains
                     self.controller.set_gains(
                         self.dump_valve.kp,
                         self.dump_valve.ki,
-                        self.dump_valve.kd
+                        self.dump_valve.kd,
                     );
                 };
                 // always update the controller even if no action is taken
-                let control_effort = self.controller.update_control(
-                    altitude.value);
+                let control_effort = self.controller.update_control(altitude.value);
                 // decide what to do in order to converge toward the target
                 if altitude.value > CTRL_ALTITUDE_FLOOR {
                     let mut vent_pwm = self.vent_valve.ctrl2pwm(control_effort);
                     let mut dump_pwm = self.dump_valve.ctrl2pwm(control_effort);
 
                     // configure registers for reasons to not actuate
-                    let mut ctrl_inhibitor_mask = ControlInhibitors::ControlOK;
+                    let mut ctrl_inhibitor_mask = ControlInhibitors::NONE;
                     let control_action: &str;
                     if error.abs() < CTRL_ERROR_DEADZONE {
                         // altitude error is within the deadzone
-                        debug!("Altitude error is {}, which is within the deadzone of {}",
-                                error.abs(), CTRL_ERROR_DEADZONE);
-                        ctrl_inhibitor_mask.set(ControlInhibitors::AltitudeDeadzone,true)
+                        debug!(
+                            "Altitude error is {}, which is within the deadzone of {}",
+                            error.abs(),
+                            CTRL_ERROR_DEADZONE
+                        );
+                        ctrl_inhibitor_mask.set(ControlInhibitors::ALTITUDE_DEADZONE, true)
                     }
                     if ascent_rate.value.abs() < CTRL_SPEED_DEADZONE {
                         // ascent rate is within the deadzone
-                        debug!("Ascent Rate is {}, which is within the deadzone of {}",
-                                ascent_rate.value.abs(), CTRL_SPEED_DEADZONE);
-                        ctrl_inhibitor_mask.set(ControlInhibitors::SpeedDeadzone,true)
+                        debug!(
+                            "Ascent Rate is {}, which is within the deadzone of {}",
+                            ascent_rate.value.abs(),
+                            CTRL_SPEED_DEADZONE
+                        );
+                        ctrl_inhibitor_mask.set(ControlInhibitors::SPEED_DEADZONE, true)
                     }
                     if is_stale(&altitude, CTRL_TLM_MAX_AGE) {
                         // altitude telemetry is stale
-                        warn!("Altitude telemetry is stale! ({:#?} s old)", &altitude.timestamp.elapsed());
-                        ctrl_inhibitor_mask.set(ControlInhibitors::StaleTelemetry,true)
+                        warn!(
+                            "Altitude telemetry is stale! ({:#?} s old)",
+                            &altitude.timestamp.elapsed()
+                        );
+                        ctrl_inhibitor_mask.set(ControlInhibitors::STALE_TELEMETRY, true)
                     }
                     if is_stale(&ascent_rate, CTRL_TLM_MAX_AGE) {
                         // ascent rate telemetry is stale
-                        warn!("Ascent Rate telemetry is stale! ({:#?} s old)", &ascent_rate.timestamp.elapsed());
-                        ctrl_inhibitor_mask.set(ControlInhibitors::StaleTelemetry,true)
+                        warn!(
+                            "Ascent Rate telemetry is stale! ({:#?} s old)",
+                            &ascent_rate.timestamp.elapsed()
+                        );
+                        ctrl_inhibitor_mask.set(ControlInhibitors::STALE_TELEMETRY, true)
                     }
-                    if (vent_pwm <= 0.001) & (dump_pwm <= 0.001) {
-                        ctrl_inhibitor_mask.set(ControlInhibitors::ValveDeadzone,true)
+                    if self.dump_valve.deadzoned == true {
+                        ctrl_inhibitor_mask.set(ControlInhibitors::DUMP_DEADZONE, true)
                     }
+                    if self.vent_valve.deadzoned == true {
+                        ctrl_inhibitor_mask.set(ControlInhibitors::VENT_DEADZONE, true)
+                    }
+                    let control_ok = !ctrl_inhibitor_mask
+                        .intersects(ControlInhibitors::STALE_TELEMETRY)
+                        & !(ctrl_inhibitor_mask.intersects(ControlInhibitors::ALTITUDE_DEADZONE)
+                            & ctrl_inhibitor_mask.intersects(ControlInhibitors::SPEED_DEADZONE));
                     // decide if/how to actuate valves
-                    if self.allow_control(ctrl_inhibitor_mask) {
-                        if ascent_rate.value > 0.0 {
-                            // lower altitude for error to converge to zero
-                            // set the vent PWM to whatever the controller says
-                            // close the dump valve
-                            dump_pwm = 0.0;
-                            control_action = "Venting";
-                        } else {
-                            // raise altitude for error to converge to zero
-                            // set the vent PWM to whatever the controller says
-                            // close the vent valve
-                            vent_pwm = 0.0;
-                            control_action = "Dumping";
-                        };
+                    if control_ok & (ascent_rate.value > 0.0) {
+                        // lower altitude for error to converge to zero
+                        // set the vent PWM to whatever the controller says
+                        // close the dump valve
+                        dump_pwm = 0.0;
+                        control_action = "Vent";
+                    } else if control_ok & (ascent_rate.value <= 0.0) {
+                        // raise altitude for error to converge to zero
+                        // set the vent PWM to whatever the controller says
+                        // close the vent valve
+                        vent_pwm = 0.0;
+                        control_action = "Dump";
                     } else {
                         // if in dead zone or telemetry is stale, do nothing
                         // close the vent valve
                         vent_pwm = 0.0;
                         // close the dump valve
                         dump_pwm = 0.0;
-                        control_action = "Idling ";
-                        // reset the controller to avoid accumulated error
-                        self.controller.reset_integral();
+                        control_action = "Idle";
                     };
                     self.vent_valve.set_pwm(vent_pwm);
                     self.dump_valve.set_pwm(dump_pwm);
                     info!(
-                        "[{}] {:#?} {} (Vent {:0.2} % | Dump {:0.2} % )",
+                        "[{}:{}] Inhibitors: {:#?}",
                         self.state,
-                        ctrl_inhibitor_mask,
                         control_action,
-                        vent_pwm * 100.0,
-                        dump_pwm * 100.0,
+                        ctrl_inhibitor_mask,
                     );
                 } else {
                     // abort if altitude is lower than the lowest allowed value
@@ -304,6 +311,10 @@ impl ControlMngr {
                 self.vent_valve.set_pwm(0.0);
                 // close the dump valve
                 self.dump_valve.set_pwm(0.0);
+                warn!(
+                    "[{}] All valves closed. Altitude: {} m",
+                    self.state, altitude.value,
+                );
             }
             ControlState::Abort => {
                 // keep the balloon valve closed and dump all ballast

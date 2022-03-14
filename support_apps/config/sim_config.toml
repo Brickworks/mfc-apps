@@ -1,5 +1,5 @@
 # flight configuration
-physics_rate_hz = 100.0
+physics_rate_hz = 40.0
 initial_altitude_m = 22_975.793
 initial_velocity_m_s = 16.0131
 ballast_mass_kg = 0.5
