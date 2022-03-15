@@ -1,7 +1,7 @@
 use std::time::Instant;
 use std::path::PathBuf;
 use toml::Value;
-use log::{error, info};
+use log::info;
 
 use control_apps::{
     control_mngr::{ControlCommand, ControlMngr},
