@@ -127,6 +127,8 @@ impl AsyncSim {
                 output.ballast_mass = step_input.ballast_mass;
                 output.vent_pwm = step_input.vent_pwm;
                 output.dump_pwm = step_input.dump_pwm;
+                output.atmo_temp = step_input.atmo_temp;
+                output.atmo_pres = step_input.atmo_pres;
                 log_to_file(&output, &mut writer);
             }
         }
@@ -147,6 +149,8 @@ fn init_log_file(outpath: PathBuf) -> csv::Writer<File> {
             "dump_pwm",
             "gross_lift_N",
             "free_lift_N",
+            "atmo_temp_K",
+            "atmo_pres_Pa",
         ])
         .unwrap();
     writer
@@ -165,6 +169,8 @@ fn log_to_file(sim_output: &SimOutput, writer: &mut csv::Writer<File>) {
             sim_output.dump_pwm.to_string(),
             sim_output.gross_lift.to_string(),
             sim_output.free_lift.to_string(),
+            sim_output.atmo_temp.to_string(),
+            sim_output.atmo_pres.to_string(),
         ])
         .unwrap();
     writer.flush().unwrap();

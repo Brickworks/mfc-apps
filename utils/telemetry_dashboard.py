@@ -8,7 +8,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import tailer as tl
 
-DEFAULT_DATA_CSV = 'support_apps/out.csv'
+DEFAULT_DATA_CSV = 'cli/out.csv'
 DEFAULT_TAIL_LINES = 1000
 PLOT_TEMPLATE = 'plotly_white'
 
@@ -58,11 +58,13 @@ app.layout = html.Div([
                 # vent status
                 dcc.Graph(id='lift_gas_mass'),
                 dcc.Graph(id='vent_pwm'),
+                dcc.Graph(id='atmo_pres'),
             ]),
             html.Div([
                 # dump status
                 dcc.Graph(id='ballast_mass'),
                 dcc.Graph(id='dump_pwm'),
+                dcc.Graph(id='atmo_temp'),
             ])
         ],
         style={
@@ -84,11 +86,20 @@ def get_last_n_lines_from_csv(intervals, n_lines, fname=DEFAULT_DATA_CSV):
         file, n_lines)  #to read last n lines, change it to any value.
     file.close()
     return pd.read_csv(io.StringIO('\n'.join(lastLines)),
-                       header=None,
+                       header=1,
                        names=[
-                           'time_s', 'altitude_m', 'ascent_rate_m_s',
-                           'acceleration_m_s2', 'lift_gas_mass_kg',
-                           'ballast_mass_kg', 'vent_pwm', 'dump_pwm'
+                           'time_s',
+                           'altitude_m',
+                           'ascent_rate_m_s',
+                           'acceleration_m_s2',
+                           'lift_gas_mass_kg',
+                           'ballast_mass_kg',
+                           'vent_pwm',
+                           'dump_pwm',
+                           'gross_lift_N',
+                           'free_lift_N',
+                           'atmo_temp_K',
+                           'atmo_pres_Pa',
                        ]).to_json()
 
 
@@ -101,9 +112,9 @@ def simple_scatter(df, name):
     )
     fig.add_trace(
         go.Scattergl(x=df['time_s'],
-                    y=df[name],
-                    mode='markers+lines',
-                    name=name))
+                     y=df[name],
+                     mode='markers+lines',
+                     name=name))
     return fig
 
 
@@ -176,6 +187,26 @@ def vent_pwm(interval, data):
 def dump_pwm(interval, data):
     df = pd.read_json(data)
     return simple_scatter(df, 'dump_pwm')
+
+
+@app.callback(
+    Output('atmo_temp', 'figure'),
+    Input('interval-component', 'n_intervals'),
+    Input('last-n-lines', 'data'),
+)
+def atmo_temp(interval, data):
+    df = pd.read_json(data)
+    return simple_scatter(df, 'atmo_temp_K')
+
+
+@app.callback(
+    Output('atmo_pres', 'figure'),
+    Input('interval-component', 'n_intervals'),
+    Input('last-n-lines', 'data'),
+)
+def atmo_pres(interval, data):
+    df = pd.read_json(data)
+    return simple_scatter(df, 'atmo_pres_Pa')
 
 
 if __name__ == '__main__':

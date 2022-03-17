@@ -42,6 +42,12 @@ pub fn start_sim(ctrl_config: &PathBuf, sim_config: &PathBuf, outfile: &PathBuf)
         ctrl_config_toml["dump_kp"].as_float().unwrap() as f32,
         ctrl_config_toml["dump_ki"].as_float().unwrap() as f32,
         ctrl_config_toml["dump_kd"].as_float().unwrap() as f32,
+        ctrl_config_toml["altitude_floor_m"].as_float().unwrap() as f32,
+        ctrl_config_toml["error_deadzone_m"].as_float().unwrap() as f32,
+        ctrl_config_toml["error_ready_threshold_m"].as_float().unwrap() as f32,
+        ctrl_config_toml["speed_deadzone_m_s"].as_float().unwrap() as f32,
+        ctrl_config_toml["tlm_max_age_s"].as_float().unwrap() as u64,
+        ctrl_config_toml["min_ballast_kg"].as_float().unwrap() as f32,
     );
     let mut ctrl_sleeper =
         async_sim::Rate::new(ctrl_config_toml["ctrl_rate_hz"].as_float().unwrap() as f32);
