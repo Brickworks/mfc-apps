@@ -79,18 +79,18 @@ pub struct ControlMngr {
 impl ControlMngr {
     pub fn new(
         target_altitude: f32,
-        vent_kp: f32, // vent valve controller proportional gain
-        vent_ki: f32, // vent valve controller integral gain
-        vent_kd: f32, // vent valve controller derivatitve gain
-        dump_kp: f32, // dump valve controller proportional gain
-        dump_ki: f32, // dump valve controller integral gain
-        dump_kd: f32, // dump valve controller derivatitve gain
-        altitude_floor: f32,    // minimum allowed altitude in meters
-        error_deadzone: f32,    // magnitude of margin to allow without actuation
-        error_ready: f32,       // basically opposite of deadzone
-        speed_deadzone: f32,    // magnitude of margin to allow without actuation
-        tlm_max_age: u64,  // maximum age of telemetry to act on
-        min_ballast: f32,       // abort if ballast is less than this in kg
+        vent_kp: f32,        // vent valve controller proportional gain
+        vent_ki: f32,        // vent valve controller integral gain
+        vent_kd: f32,        // vent valve controller derivatitve gain
+        dump_kp: f32,        // dump valve controller proportional gain
+        dump_ki: f32,        // dump valve controller integral gain
+        dump_kd: f32,        // dump valve controller derivatitve gain
+        altitude_floor: f32, // minimum allowed altitude in meters
+        error_deadzone: f32, // magnitude of margin to allow without actuation
+        error_ready: f32,    // basically opposite of deadzone
+        speed_deadzone: f32, // magnitude of margin to allow without actuation
+        tlm_max_age: u64,    // maximum age of telemetry to act on
+        min_ballast: f32,    // abort if ballast is less than this in kg
     ) -> Self {
         // initialize valve objects
         let vent_valve = Valve::new(-1.0, 0.0, vent_kp, vent_ki, vent_kd, String::from("VENTER"));
@@ -199,9 +199,7 @@ impl ControlMngr {
                     error.abs()
                 );
                 // lets do this!
-                if !(altitude.value <= self.altitude_floor)
-                    && error.abs() <= self.error_ready
-                {
+                if !(altitude.value <= self.altitude_floor) && error.abs() <= self.error_ready {
                     info!(
                         "{} m is close enough to target {} m --> Stabilize!",
                         altitude.value, self.target_altitude
@@ -246,7 +244,9 @@ impl ControlMngr {
                     let dump_pwm = self.dump_valve.ctrl2pwm(control_effort);
 
                     // configure registers for reasons to not actuate
-                    if is_stale(&altitude, self.tlm_max_age) | is_stale(&ascent_rate, self.tlm_max_age) {
+                    if is_stale(&altitude, self.tlm_max_age)
+                        | is_stale(&ascent_rate, self.tlm_max_age)
+                    {
                         // altitude telemetry is stale
                         warn!(
                             "Altitude telemetry is stale! ({:#?} s old)",
@@ -282,11 +282,10 @@ impl ControlMngr {
                     }
 
                     // decide if/how to actuate valves
-                    let telem_ok =
-                        !self.status.intersects(ControlStatus::STALE_TELEMETRY);
-                    let control_ok = telem_ok & !(self.status
-                        .intersects(ControlStatus::ALTITUDE_DEADZONE)
-                        & self.status.intersects(ControlStatus::SPEED_DEADZONE));
+                    let telem_ok = !self.status.intersects(ControlStatus::STALE_TELEMETRY);
+                    let control_ok = telem_ok
+                        & !(self.status.intersects(ControlStatus::ALTITUDE_DEADZONE)
+                            & self.status.intersects(ControlStatus::SPEED_DEADZONE));
 
                     if control_ok & (ascent_rate.value > 0.0) {
                         // lower altitude for error to converge to zero
@@ -315,11 +314,7 @@ impl ControlMngr {
                     } else {
                         self.dump_valve.set_pwm(0.0)
                     }
-                    info!(
-                        "{}:[{:#?}]",
-                        self.mode,
-                        self.status,
-                    );
+                    info!("{}:[{:#?}]", self.mode, self.status,);
                 } else {
                     // abort if altitude is lower than the lowest allowed value
                     warn!(
