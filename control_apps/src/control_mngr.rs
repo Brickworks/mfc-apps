@@ -40,14 +40,14 @@ impl fmt::Display for ControlMode {
 bitflags! {
     #[derive(Default)]
     struct ControlStatus: u32 {
-        const OFF               = 0b00000000;
-        const STALE_TELEMETRY   = 0b00000001;
-        const SAFE              = 0b00000010;
-        const ACTIVE            = 0b00000100;
-        const VENT              = 0b00001000;
-        const DUMP              = 0b00010000;
-        const ALTITUDE_DEADZONE = 0b00100000;
-        const SPEED_DEADZONE    = 0b01000000;
+        // registers to indicate when conditions are true
+        const INACTIVE          = 0b00000000;
+        const ACTIVE            = 0b00000001;
+        const VENT              = 0b00000010;
+        const DUMP              = 0b00000100;
+        const STALE_TELEMETRY   = 0b00001000;
+        const ALTITUDE_DEADZONE = 0b00010000;
+        const SPEED_DEADZONE    = 0b00100000;
         const PROBLEM           = 0b10000000;
     }
 }
@@ -117,7 +117,7 @@ impl ControlMngr {
         // return a configured control manager
         return ControlMngr {
             mode: ControlMode::Init,
-            status: ControlStatus::OFF,
+            status: ControlStatus::INACTIVE,
             vent_valve,
             dump_valve,
             target_altitude,
@@ -159,7 +159,6 @@ impl ControlMngr {
         info!("POST complete!");
         // when POST is complete, transition from idle to safe
         self.mode = ControlMode::Ready;
-        self.status.set(ControlStatus::SAFE, true);
     }
 
     fn abort_if_out_of_ballast(&mut self, ballast_mass: f32) {
@@ -205,7 +204,6 @@ impl ControlMngr {
                         altitude.value, self.target_altitude
                     );
                     self.mode = ControlMode::Stabilize;
-                    self.status.set(ControlStatus::SAFE, false);
                     self.status.set(ControlStatus::ACTIVE, true);
                     // reset the integral to avoid accumulated error
                     self.controller.reset_integral();
@@ -214,7 +212,12 @@ impl ControlMngr {
             ControlMode::Stabilize => {
                 // abort if there's no ballast left, doesn't matter if tlm is stale
                 self.abort_if_out_of_ballast(ballast_mass.value);
-
+                // abort if there's a problem
+                if self.status.intersects(ControlStatus::PROBLEM) {
+                    self.mode = ControlMode::Abort;
+                    // run mission abort procedure immediately
+                    return self.update(altitude, ascent_rate, ballast_mass);
+                }
                 // switch gains depending on ascent rate
                 if ascent_rate.value > 0.0 {
                     // if rising, vent
@@ -264,6 +267,8 @@ impl ControlMngr {
                             error.abs(),
                             self.error_deadzone
                         );
+                        // reset the integral to avoid accumulated error
+                        self.controller.reset_integral();
                         self.status.set(ControlStatus::ALTITUDE_DEADZONE, true)
                     } else {
                         self.status.set(ControlStatus::ALTITUDE_DEADZONE, false)
@@ -330,17 +335,16 @@ impl ControlMngr {
                 self.vent_valve.set_pwm(0.0);
                 // close the dump valve
                 self.dump_valve.set_pwm(0.0);
-                self.status.set(ControlStatus::SAFE, true);
                 self.status.set(ControlStatus::ACTIVE, false);
                 self.status.set(ControlStatus::VENT, false);
                 self.status.set(ControlStatus::DUMP, false);
             }
             ControlMode::Abort => {
+                self.status.set(ControlStatus::PROBLEM, true);
                 // keep the balloon valve closed and dump all ballast
                 if ballast_mass.value <= 0.0 {
                     warn!("Out of ballast mass!");
                     self.mode = ControlMode::Safe;
-                    self.status.set(ControlStatus::PROBLEM, true);
                 } else {
                     // close the vent valve
                     self.vent_valve.set_pwm(0.0);

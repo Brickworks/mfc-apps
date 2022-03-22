@@ -1,9 +1,7 @@
 import io
 
-from dash import Dash
+from dash import Dash, html, dcc
 from dash.dependencies import Input, Output
-import dash_core_components as dcc
-import dash_html_components as html
 import pandas as pd
 import plotly.graph_objects as go
 import tailer as tl
@@ -83,7 +81,7 @@ app.layout = html.Div([
 def get_last_n_lines_from_csv(intervals, n_lines, fname=DEFAULT_DATA_CSV):
     file = open(fname)
     lastLines = tl.tail(
-        file, n_lines)  #to read last n lines, change it to any value.
+        file, n_lines)  # to read last n lines, change it to any value.
     file.close()
     return pd.read_csv(io.StringIO('\n'.join(lastLines)),
                        header=1,

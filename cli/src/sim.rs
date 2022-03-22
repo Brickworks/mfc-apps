@@ -31,6 +31,7 @@ pub fn start_sim(ctrl_config: &PathBuf, sim_config: &PathBuf, outfile: &PathBuf)
     );
 
     // configure simulation
+    let max_sim_time = sim_config_toml["max_sim_time_s"].as_float().unwrap() as f32;
     let mut sim = async_sim::AsyncSim::new(sim_config_toml, outfile.clone());
 
     // configure controller
@@ -53,13 +54,11 @@ pub fn start_sim(ctrl_config: &PathBuf, sim_config: &PathBuf, outfile: &PathBuf)
         async_sim::Rate::new(ctrl_config_toml["ctrl_rate_hz"].as_float().unwrap() as f32);
     sim.start();
 
-    
-    const MAX_SIM_TIME: f32 = 300.0; // max number of seconds for a simulation
     // now iterate until the altitude hits zero or time is too long
     loop {
         let sim_output = sim.get_sim_output();
         // Run for a certain amount of sim time or to a certain altitude
-        if (sim_output.time_s >= MAX_SIM_TIME)
+        if (sim_output.time_s >= max_sim_time)
             || (sim_output.altitude <= 0.0 && sim_output.ascent_rate < 0.0)
         {
             break;
