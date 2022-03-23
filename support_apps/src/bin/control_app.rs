@@ -136,6 +136,12 @@ fn main() {
         config["dump_kp"].as_float().unwrap() as f32,
         config["dump_ki"].as_float().unwrap() as f32,
         config["dump_kd"].as_float().unwrap() as f32,
+        config["altitude_floor_m"].as_float().unwrap() as f32,
+        config["error_deadzone_m"].as_float().unwrap() as f32,
+        config["error_ready_threshold_m"].as_float().unwrap() as f32,
+        config["speed_deadzone_m_s"].as_float().unwrap() as f32,
+        config["tlm_max_age_s"].as_float().unwrap() as u64,
+        config["min_ballast_kg"].as_float().unwrap() as f32,
     );
     let update_thread = std::thread::spawn(move || updater(most_recent_msg, &mut mngr, thread_tx));
 
