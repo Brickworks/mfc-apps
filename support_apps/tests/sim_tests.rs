@@ -1,4 +1,5 @@
 use std::time::Instant;
+use std::path::PathBuf;
 use toml::Value;
 
 use control_apps::{
@@ -9,8 +10,7 @@ use simulator::{async_sim, SimOutput, SimCommands};
 
 extern crate pretty_env_logger;
 
-const MAX_SIM_TIME: f32 = 30_000.0; // max number of seconds for a simulation
-
+#[test]
 fn test_closed_loop() {
     pretty_env_logger::init(); // initialize pretty print
 
@@ -20,7 +20,10 @@ fn test_closed_loop() {
         .as_str()
         .parse::<Value>()
         .unwrap();
-    let mut sim = async_sim::AsyncSim::new(sim_config_toml);
+    let mut outfile = PathBuf::new();
+    outfile.push("out");
+    outfile.set_extension("csv");
+    let mut sim = async_sim::AsyncSim::new(sim_config_toml, outfile);
 
     // configure controller
     let ctrl_config = std::fs::read_to_string("./config/control_config.toml")
@@ -42,11 +45,16 @@ fn test_closed_loop() {
 
     sim.start();
 
+    const MAX_SIM_TIME: f32 = 120.0; // max number of seconds for a simulation
     // now iterate until the altitude hits zero or time is too long
     loop {
         let sim_output = sim.get_sim_output();
         // Run for a certain amount of sim time or to a certain altitude
         if (sim_output.time_s >= MAX_SIM_TIME) || (sim_output.altitude <= 0.0 && sim_output.ascent_rate < 0.0) {
+            println!(
+                "Simulation halted! [Time]: {} s [Last Altitude] {} m [Last Acent Rate] {} m/s",
+                sim_output.time_s, sim_output.altitude, sim_output.ascent_rate
+            );
             break
         }
 
