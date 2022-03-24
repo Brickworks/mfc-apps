@@ -39,6 +39,12 @@ fn test_closed_loop() {
         ctrl_config["dump_kp"].as_float().unwrap() as f32,
         ctrl_config["dump_ki"].as_float().unwrap() as f32,
         ctrl_config["dump_kd"].as_float().unwrap() as f32,
+        ctrl_config["altitude_floor_m"].as_float().unwrap() as f32,
+        ctrl_config["error_deadzone_m"].as_float().unwrap() as f32,
+        ctrl_config["error_ready_threshold_m"].as_float().unwrap() as f32,
+        ctrl_config["speed_deadzone_m_s"].as_float().unwrap() as f32,
+        ctrl_config["tlm_max_age_s"].as_float().unwrap() as u64,
+        ctrl_config["min_ballast_kg"].as_float().unwrap() as f32,
     );
     let mut ctrl_sleeper = async_sim::Rate::new(
         ctrl_config["ctrl_rate_hz"].as_float().unwrap() as f32);

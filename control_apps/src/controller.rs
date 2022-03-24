@@ -9,6 +9,7 @@ use log::{debug, warn};
 
 use pid::Pid;
 
+#[derive(Clone, Copy)]
 pub struct Controller {
     // Altitude control algorithm handler
     controller: Pid<f32>, // PID used to determine PWM
@@ -58,10 +59,12 @@ pub struct Valve {
     pub kp: f32,   // valve controller proportional gain
     pub ki: f32,   // valve controller integral gain
     pub kd: f32,   // valve controller derivatitve gain
+    pub clamped: bool, // whether the valve is at its min or max value
+    pub name: String,    // label for the valve
 }
 
 impl Valve {
-    pub fn new(min_ctrl: f32, max_ctrl: f32, kp: f32, ki: f32, kd: f32) -> Self {
+    pub fn new(min_ctrl: f32, max_ctrl: f32, kp: f32, ki: f32, kd: f32, name: String) -> Self {
         Valve {
             pwm: 0.0, // PWM setting for open/close duty cycle
             min_ctrl, // control effort upper limit
@@ -69,6 +72,8 @@ impl Valve {
             kp,       // valve controller proportional gain
             ki,       // valve controller integral gain
             kd,       // valve controller derivatitve gain
+            clamped: false, // whether the valve is at its min or max value
+            name,     // label for this valve
         }
     }
 
@@ -81,9 +86,9 @@ impl Valve {
                 "Clamping PWM {:} to {:}",
                 pwm_value,
                 clamp(pwm_value, 0.0, 1.0)
-            );
-            self.pwm = clamp(pwm_value, 0.0, 1.0);
+            )
         }
+        self.pwm = clamp(pwm_value, 0.0, 1.0);
     }
 
     pub fn get_pwm(&self) -> f32 {
@@ -91,11 +96,12 @@ impl Valve {
         return self.pwm;
     }
 
-    pub fn ctrl2pwm(&self, control_effort: f32) -> f32 {
+    pub fn ctrl2pwm(&mut self, control_effort: f32) -> f32 {
         // translate control effort to PWM
-        let new_pwm = clamp(control_effort, self.min_ctrl, self.max_ctrl).abs();
-        debug!("PID effort: {:} | PWM {:}", control_effort, new_pwm);
-        return new_pwm;
+        let new_pwm = clamp(control_effort, self.min_ctrl, self.max_ctrl);
+        debug!("[{}] PID effort: {:} | PWM {:}", self.name, control_effort, new_pwm.abs());
+        self.clamped = (new_pwm == self.min_ctrl) | (new_pwm == self.max_ctrl);
+        return new_pwm.abs();
     }
 }
 

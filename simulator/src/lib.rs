@@ -22,4 +22,6 @@ pub struct SimOutput {
     pub dump_pwm: f32,
     pub gross_lift: f32,
     pub free_lift: f32,
+    pub atmo_temp: f32,
+    pub atmo_pres: f32,
 }

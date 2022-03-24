@@ -5,27 +5,19 @@
 // ----------------------------------------------------------------------------
 
 use std::fmt;
-use std::thread::sleep; // only used to emulate some sort of POST
 use std::time::Duration;
 
+use bitflags::bitflags;
 use log::{debug, info, warn};
 
-use crate::measurement::Measurement;
 use crate::controller::Controller;
 use crate::controller::Valve;
+use crate::measurement::Measurement;
 use pid::Pid;
 
-const POST_DELAY_MS: u64 = 1000; // bogus delay to emulate POST operations
-const CTRL_ALTITUDE_FLOOR: f32 = 15000.0; // minimum allowed altitude in meters
-const CTRL_ERROR_DEADZONE: f32 = 100.0; // magnitude of margin to allow without actuation
-const CTRL_ERROR_READY_THRESHOLD: f32 = 1000.0; // basically opposite of deadzone
-const CTRL_SPEED_DEADZONE: f32 = 0.2; // magnitude of margin to allow without actuation
-const CTRL_TLM_MAX_AGE: Duration = Duration::from_secs(2); // maximum age of telemetry to act on
-const CTRL_MIN_BALLAST: f32 = 0.01; // abort if ballast is less than this in kg
-
 #[derive(Copy, Clone, Debug, PartialEq)]
-pub enum ControlState {
-    // States to dictate overall control states
+pub enum ControlMode {
+    // States to dictate overall control modes
     Init,      // startup, POST, FSW initialization, HW initialization
     Ready,     // not allowed to actuate valves, but waiting for go-ahead
     Stabilize, // actively actuate valves
@@ -33,15 +25,30 @@ pub enum ControlState {
     Abort,     // panic! dump all ballast and lock balloon valve closed
 }
 
-impl fmt::Display for ControlState {
+impl fmt::Display for ControlMode {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            ControlState::Init => write!(f, "Init"),
-            ControlState::Ready => write!(f, "Ready"),
-            ControlState::Stabilize => write!(f, "Stabilize"),
-            ControlState::Safe => write!(f, "Safe"),
-            ControlState::Abort => write!(f, "Abort"),
+            ControlMode::Init => write!(f, "Init"),
+            ControlMode::Ready => write!(f, "Ready"),
+            ControlMode::Stabilize => write!(f, "Stabilize"),
+            ControlMode::Safe => write!(f, "Safe"),
+            ControlMode::Abort => write!(f, "Abort"),
         }
+    }
+}
+
+bitflags! {
+    #[derive(Default)]
+    struct ControlStatus: u32 {
+        // registers to indicate when conditions are true
+        const INACTIVE          = 0b00000000;
+        const ACTIVE            = 0b00000001;
+        const VENT              = 0b00000010;
+        const DUMP              = 0b00000100;
+        const STALE_TELEMETRY   = 0b00001000;
+        const ALTITUDE_DEADZONE = 0b00010000;
+        const SPEED_DEADZONE    = 0b00100000;
+        const PROBLEM           = 0b10000000;
     }
 }
 
@@ -55,26 +62,39 @@ pub struct ControlCommand {
 
 pub struct ControlMngr {
     // Master altitude control state machine
-    state: ControlState,
+    mode: ControlMode,
+    status: ControlStatus,
     vent_valve: Valve,      // vent valve object
     dump_valve: Valve,      // dump valve object
     target_altitude: f32,   // target altitude hold in meters
     controller: Controller, // PID controller object
+    altitude_floor: f32,    // minimum allowed altitude in meters
+    error_deadzone: f32,    // magnitude of margin to allow without actuation
+    error_ready: f32,       // basically opposite of deadzone
+    speed_deadzone: f32,    // magnitude of margin to allow without actuation
+    tlm_max_age: Duration,  // maximum age of telemetry to act on
+    min_ballast: f32,       // abort if ballast is less than this in kg
 }
 
 impl ControlMngr {
     pub fn new(
         target_altitude: f32,
-        vent_kp: f32, // vent valve controller proportional gain
-        vent_ki: f32, // vent valve controller integral gain
-        vent_kd: f32, // vent valve controller derivatitve gain
-        dump_kp: f32, // dump valve controller proportional gain
-        dump_ki: f32, // dump valve controller integral gain
-        dump_kd: f32, // dump valve controller derivatitve gain
+        vent_kp: f32,        // vent valve controller proportional gain
+        vent_ki: f32,        // vent valve controller integral gain
+        vent_kd: f32,        // vent valve controller derivatitve gain
+        dump_kp: f32,        // dump valve controller proportional gain
+        dump_ki: f32,        // dump valve controller integral gain
+        dump_kd: f32,        // dump valve controller derivatitve gain
+        altitude_floor: f32, // minimum allowed altitude in meters
+        error_deadzone: f32, // magnitude of margin to allow without actuation
+        error_ready: f32,    // basically opposite of deadzone
+        speed_deadzone: f32, // magnitude of margin to allow without actuation
+        tlm_max_age: u64,    // maximum age of telemetry to act on
+        min_ballast: f32,    // abort if ballast is less than this in kg
     ) -> Self {
         // initialize valve objects
-        let vent_valve = Valve::new(-1.0, 0.0, vent_kp, vent_ki, vent_kd);
-        let dump_valve = Valve::new(0.0, 1.0, dump_kp, dump_ki, dump_kd);
+        let vent_valve = Valve::new(-1.0, 0.0, vent_kp, vent_ki, vent_kd, String::from("VENTER"));
+        let dump_valve = Valve::new(0.0, 1.0, dump_kp, dump_ki, dump_kd, String::from("DUMPER"));
 
         // define PID error and output limits (-limit <= term <= limit)
         let p_limit = 1.0;
@@ -96,29 +116,36 @@ impl ControlMngr {
         let controller = Controller::new(pid_controller);
         // return a configured control manager
         return ControlMngr {
-            state: ControlState::Init,
+            mode: ControlMode::Init,
+            status: ControlStatus::INACTIVE,
             vent_valve,
             dump_valve,
             target_altitude,
             controller,
+            altitude_floor,
+            error_deadzone,
+            error_ready,
+            speed_deadzone,
+            tlm_max_age: Duration::from_secs(tlm_max_age),
+            min_ballast,
         };
     }
 
-    pub fn get_state(&self) -> ControlState {
-        return self.state;
+    pub fn get_mode(&self) -> ControlMode {
+        return self.mode;
     }
 
     pub fn set_target(&mut self, target_altitude: f32) {
         // set new target altitude
         // Set a new target altitude to converge toward (in meters)
-        if target_altitude > CTRL_ALTITUDE_FLOOR {
+        if target_altitude > self.altitude_floor {
             // target must be above the minimum allowed altitude
             self.target_altitude = target_altitude;
             info!("New target altitude: {:}m", self.target_altitude);
         } else {
             warn!(
                 "Not allowed to set target altitude below {:}! Ignoring...",
-                CTRL_ALTITUDE_FLOOR
+                self.altitude_floor
             );
         }
     }
@@ -128,38 +155,22 @@ impl ControlMngr {
         info!("Starting Power-On Self Test...");
         // PLACEHOLDER: hard-coded wait to check.
         // In the future this will wait for real hardware and software checks
-        sleep(Duration::from_millis(POST_DELAY_MS));
+        debug!("(the POST is a placeholder for now)");
         info!("POST complete!");
         // when POST is complete, transition from idle to safe
-        self.state = ControlState::Ready
+        self.mode = ControlMode::Ready;
     }
 
     fn abort_if_out_of_ballast(&mut self, ballast_mass: f32) {
-        if ballast_mass <= CTRL_MIN_BALLAST {
+        if ballast_mass <= self.min_ballast {
             // abort if there is no ballast left
-            warn!("Not enough ballast mass! Ballast mass: {:}kg", ballast_mass);
-            self.state = ControlState::Abort
+            warn!(
+                "Ballast mass is {:} kg which is below the minimum {} kg --> Abort!",
+                ballast_mass, self.min_ballast
+            );
+            self.mode = ControlMode::Abort;
+            self.status.set(ControlStatus::PROBLEM, true);
         } // otherwise carry on
-    }
-
-    fn allow_control(&self, ctrl_inhibitor_mask: u8) -> bool {
-        // check bitmask of control inhibitor conditions
-        // - not allowed to control if in both deadzones
-        // - of if telemetry is stale
-        // bitmask key:
-        // 1    ascent rate telemetry is stale
-        // 2    altitude telemetry is stale
-        // 3    within ascent rate deadzone
-        // 4    within altitude deadzone
-        // allow: 0000, 1000, 0100
-        // TODO: refactor this to use bitflags
-        let control_allowed: bool = match ctrl_inhibitor_mask {
-            0b0000_0000 => true,
-            0b0000_1000 => true,
-            0b0000_0100 => true,
-            _ => false,
-        };
-        return control_allowed
     }
 
     pub fn update(
@@ -168,155 +179,179 @@ impl ControlMngr {
         ascent_rate: Measurement<f32>,  // instantaneous ascent rate in m/s
         ballast_mass: Measurement<f32>, // ballast mass remining in kg
     ) -> ControlCommand {
-        // log status information
-        info!(
-            "[{:}] Altitude {:} m ({:}), Ballast Remaining {:} kg ({:})",
-            self.state,
-            altitude.value,
-            altitude.timestamp.elapsed().as_secs(),
-            ballast_mass.value,
-            ballast_mass.timestamp.elapsed().as_secs()
-        );
-
         // calculate altitude difference from the target aka altitude error
         let error = altitude.value - self.target_altitude;
 
-        // decide what to do based on what state the controller is in
-        match self.state {
-            ControlState::Init => {
+        // decide what to do based on what mode the controller is in
+        match self.mode {
+            ControlMode::Init => {
                 // initialize the hardware and software
                 info!("Inititalizing Control Manager...");
-                self.power_on_self_test()
+                self.power_on_self_test();
             }
-            ControlState::Ready => {
+            ControlMode::Ready => {
+                // log status information
+                info!(
+                    "{}:[{:#?}] Distance from target altitude: {} m",
+                    self.mode,
+                    self.status,
+                    error.abs()
+                );
                 // lets do this!
-                if !(altitude.value <= CTRL_ALTITUDE_FLOOR)
-                    && error.abs() <= CTRL_ERROR_READY_THRESHOLD
-                {
+                if !(altitude.value <= self.altitude_floor) && error.abs() <= self.error_ready {
                     info!(
-                        "{:}m is close enough to target {:}m --> Stabilize!",
+                        "{} m is close enough to target {} m --> Stabilize!",
                         altitude.value, self.target_altitude
                     );
-                    self.state = ControlState::Stabilize;
-
+                    self.mode = ControlMode::Stabilize;
+                    self.status.set(ControlStatus::ACTIVE, true);
                     // reset the integral to avoid accumulated error
                     self.controller.reset_integral();
                 }
             }
-            ControlState::Stabilize => {
-                
+            ControlMode::Stabilize => {
                 // abort if there's no ballast left, doesn't matter if tlm is stale
                 self.abort_if_out_of_ballast(ballast_mass.value);
-                
+                // abort if there's a problem
+                if self.status.intersects(ControlStatus::PROBLEM) {
+                    self.mode = ControlMode::Abort;
+                    // run mission abort procedure immediately
+                    return self.update(altitude, ascent_rate, ballast_mass);
+                }
                 // switch gains depending on ascent rate
                 if ascent_rate.value > 0.0 {
-                    // switch to vent gains
+                    // if rising, vent
                     self.controller.set_gains(
                         self.vent_valve.kp,
                         self.vent_valve.ki,
-                        self.vent_valve.kd
+                        self.vent_valve.kd,
                     );
+                    self.status.set(ControlStatus::VENT, true);
+                    self.status.set(ControlStatus::DUMP, false);
                 } else {
-                    // switch to dump gains
+                    // otherwise, dump
                     self.controller.set_gains(
                         self.dump_valve.kp,
                         self.dump_valve.ki,
-                        self.dump_valve.kd
+                        self.dump_valve.kd,
                     );
+                    self.status.set(ControlStatus::VENT, false);
+                    self.status.set(ControlStatus::DUMP, true);
                 };
                 // always update the controller even if no action is taken
-                let control_effort = self.controller.update_control(
-                    altitude.value);
+                let control_effort = self.controller.update_control(altitude.value);
                 // decide what to do in order to converge toward the target
-                if altitude.value > CTRL_ALTITUDE_FLOOR {
+                if altitude.value > self.altitude_floor {
+                    // determine what the PWM should be for each valve
+                    let vent_pwm = self.vent_valve.ctrl2pwm(control_effort);
+                    let dump_pwm = self.dump_valve.ctrl2pwm(control_effort);
+
                     // configure registers for reasons to not actuate
-                    let mut ctrl_inhibitor_mask: u8 = 0b0000_0000;
-                    if error.abs() < CTRL_ERROR_DEADZONE {
-                        // altitude error is within the deadzone
-                        ctrl_inhibitor_mask ^= 0b0000_1000;
-                    }
-                    if ascent_rate.value.abs() < CTRL_SPEED_DEADZONE {
-                        // ascent rate is within the deadzone
-                        ctrl_inhibitor_mask ^= 0b0000_0100;
-                    }
-                    if is_stale(&altitude, CTRL_TLM_MAX_AGE) {
+                    if is_stale(&altitude, self.tlm_max_age)
+                        | is_stale(&ascent_rate, self.tlm_max_age)
+                    {
                         // altitude telemetry is stale
-                        ctrl_inhibitor_mask ^= 0b0000_0010;
+                        warn!(
+                            "Altitude telemetry is stale! ({:#?} s old)",
+                            &altitude.timestamp.elapsed()
+                        );
+                        self.status.set(ControlStatus::STALE_TELEMETRY, true)
+                    } else {
+                        self.status.set(ControlStatus::STALE_TELEMETRY, false)
                     }
-                    if is_stale(&ascent_rate, CTRL_TLM_MAX_AGE) {
-                        // ascent rate telemetry is stale
-                        ctrl_inhibitor_mask ^= 0b0000_0001;
+
+                    if error.abs() < self.error_deadzone {
+                        // altitude error is within the deadzone
+                        debug!(
+                            "Altitude error is {}, which is within the deadzone of {}",
+                            error.abs(),
+                            self.error_deadzone
+                        );
+                        // reset the integral to avoid accumulated error
+                        self.controller.reset_integral();
+                        self.status.set(ControlStatus::ALTITUDE_DEADZONE, true)
+                    } else {
+                        self.status.set(ControlStatus::ALTITUDE_DEADZONE, false)
+                    }
+
+                    if ascent_rate.value.abs() < self.speed_deadzone {
+                        // ascent rate is within the deadzone
+                        debug!(
+                            "Ascent Rate is {}, which is within the deadzone of {}",
+                            ascent_rate.value.abs(),
+                            self.speed_deadzone
+                        );
+                        self.status.set(ControlStatus::SPEED_DEADZONE, true)
+                    } else {
+                        self.status.set(ControlStatus::SPEED_DEADZONE, false)
                     }
 
                     // decide if/how to actuate valves
-                    if self.allow_control(ctrl_inhibitor_mask) {
-                        if ascent_rate.value > 0.0 {
-                            // lower altitude for error to converge to zero
-                            // set the vent PWM to whatever the controller says
-                            self.vent_valve.set_pwm(
-                                self.vent_valve.ctrl2pwm(control_effort)
-                            );
-                            // close the dump valve
-                            self.dump_valve.set_pwm(0.0);
-                            debug!(
-                                "[{:}] Venting at {:}%",
-                                self.state,
-                                self.vent_valve.get_pwm() * 100.0
-                            );
-                        } else {
-                            // raise altitude for error to converge to zero
-                            // close the vent valve
-                            self.vent_valve.set_pwm(0.0);
-                            // set the vent PWM to whatever the controller says
-                            self.dump_valve.set_pwm(
-                                self.dump_valve.ctrl2pwm(control_effort)
-                            );
-                            debug!(
-                                "[{:}] Dumping at {:}%",
-                                self.state,
-                                self.dump_valve.get_pwm() * 100.0
-                            );
-                        };
+                    let telem_ok = !self.status.intersects(ControlStatus::STALE_TELEMETRY);
+                    let control_ok = telem_ok
+                        & !(self.status.intersects(ControlStatus::ALTITUDE_DEADZONE)
+                            & self.status.intersects(ControlStatus::SPEED_DEADZONE));
+
+                    if control_ok & (ascent_rate.value > 0.0) {
+                        // lower altitude for error to converge to zero
+                        // close the dump valve, set the vent PWM
+                        self.status.set(ControlStatus::VENT, true);
+                        self.status.set(ControlStatus::DUMP, false);
+                    } else if control_ok & (ascent_rate.value < 0.0) {
+                        // raise altitude for error to converge to zero
+                        // close the vent valve, set the dump PWM
+                        self.status.set(ControlStatus::VENT, false);
+                        self.status.set(ControlStatus::DUMP, true);
                     } else {
                         // if in dead zone or telemetry is stale, do nothing
-                        // close the vent valve
-                        self.vent_valve.set_pwm(0.0);
-                        // close the dump valve
-                        self.dump_valve.set_pwm(0.0);
-                        debug!(
-                            "[{:}] Controller idle. Reason: {:#04b}",
-                            self.state,
-                            ctrl_inhibitor_mask
-                        );
-                        // reset the controller to avoid accumulated error
-                        self.controller.reset_integral();
+                        // close the vent valve and close the dump valve
+                        self.status.set(ControlStatus::VENT, false);
+                        self.status.set(ControlStatus::DUMP, false);
                     };
+                    // actuate the valves
+                    if self.status.intersects(ControlStatus::VENT) {
+                        self.vent_valve.set_pwm(vent_pwm)
+                    } else {
+                        self.vent_valve.set_pwm(0.0)
+                    }
+                    if self.status.intersects(ControlStatus::DUMP) {
+                        self.dump_valve.set_pwm(dump_pwm)
+                    } else {
+                        self.dump_valve.set_pwm(0.0)
+                    }
+                    info!("{}:[{:#?}]", self.mode, self.status,);
                 } else {
                     // abort if altitude is lower than the lowest allowed value
                     warn!(
-                        "{:}m lower than minimum {:}m --> Abort!",
-                        altitude.value, CTRL_ALTITUDE_FLOOR
+                        "{} m lower than minimum {} m --> Abort!",
+                        altitude.value, self.altitude_floor
                     );
-                    self.state = ControlState::Abort;
+                    self.mode = ControlMode::Abort;
                 }
             }
-            ControlState::Safe => {
+            ControlMode::Safe => {
                 // close the valves and sit tight
                 // close the vent valve
                 self.vent_valve.set_pwm(0.0);
                 // close the dump valve
                 self.dump_valve.set_pwm(0.0);
+                self.status.set(ControlStatus::ACTIVE, false);
+                self.status.set(ControlStatus::VENT, false);
+                self.status.set(ControlStatus::DUMP, false);
             }
-            ControlState::Abort => {
+            ControlMode::Abort => {
+                self.status.set(ControlStatus::PROBLEM, true);
                 // keep the balloon valve closed and dump all ballast
                 if ballast_mass.value <= 0.0 {
                     warn!("Out of ballast mass!");
-                    self.state = ControlState::Safe;
+                    self.mode = ControlMode::Safe;
                 } else {
                     // close the vent valve
                     self.vent_valve.set_pwm(0.0);
                     // open the dump valve
                     self.dump_valve.set_pwm(1.0);
+                    self.status.set(ControlStatus::VENT, false);
+                    self.status.set(ControlStatus::DUMP, true);
                 }
             }
         }

@@ -21,6 +21,8 @@ pub struct SimInstant {
     pub dump_pwm: f32,
     pub gross_lift: f32,
     pub free_lift: f32,
+    pub atmo_temp: f32,
+    pub atmo_pres: f32,
 }
 
 pub struct SimConfig {
@@ -63,6 +65,8 @@ pub fn init(config: &Value) -> (SimInstant, SimConfig) {
             dump_pwm: 0.0,
             gross_lift: gross_lift(atmo, gas),
             free_lift: free_lift(atmo, gas, total_dry_mass),
+            atmo_temp: atmo.temperature(),
+            atmo_pres: atmo.pressure(),
         },
         SimConfig {
             delta_t: 1.0/config["physics_rate_hz"].as_float().unwrap() as f32,
@@ -141,6 +145,10 @@ pub fn step(input: SimInstant, config: &SimConfig) -> SimInstant {
     let gross_lift = gross_lift(atmosphere, balloon.lift_gas);
     let free_lift = free_lift(atmosphere, balloon.lift_gas, total_dry_mass);
 
+    // atmosphere stats
+    let atmo_temp = atmosphere.temperature();
+    let atmo_pres = atmosphere.pressure();
+
     SimInstant {
         time,
         altitude,
@@ -153,5 +161,7 @@ pub fn step(input: SimInstant, config: &SimConfig) -> SimInstant {
         dump_pwm,
         gross_lift,
         free_lift,
+        atmo_temp,
+        atmo_pres,
     }
 }
