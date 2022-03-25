@@ -43,16 +43,6 @@ enum Commands {
     /// simulation runs on the MFC with flight software code running in the
     /// loop and logs the simulation output to a CSV file.
     Sim {
-        /// Sets a custom altitude controller config file
-        #[clap(
-            short,
-            long,
-            parse(from_os_str),
-            value_name = "FILE",
-            default_value = "../support_apps/config/control_config.toml"
-        )]
-        ctrl_config: PathBuf,
-
         /// Sets a custom simulation config file
         #[clap(
             short,
@@ -75,7 +65,7 @@ enum Commands {
     },
 
     /// Initiate flight sequence
-    Boot {
+    Control {
         /// Sets a custom altitude controller config file
         #[clap(
             short,
@@ -84,7 +74,7 @@ enum Commands {
             value_name = "FILE",
             default_value = "../support_apps/config/control_config.toml"
         )]
-        config: PathBuf,
+        ctrl_config: PathBuf,
     },
 }
 
@@ -97,11 +87,16 @@ pub fn parse_inputs() {
             status::full_report()
         }
         Commands::Sim {
-            ctrl_config,
             sim_config,
             outfile,
         } => {
-            sim::start_sim(ctrl_config, sim_config, outfile);
+            sim::start_sim(sim_config, outfile);
+        }
+        Commands::Control {
+            ctrl_config,
+        } => {
+            // sim::start_control(ctrl_config);
+            error!("almost ready! come back later")
         }
         _ => {
             error!("Command not implemented yet!")

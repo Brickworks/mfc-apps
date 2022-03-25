@@ -1,12 +1,13 @@
 use crate::simulate;
 use crate::{SimCommands, SimOutput};
+use log::{debug, error, info, warn};
+use std::fs::File;
 use std::path::PathBuf;
 use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
-use std::fs::File;
 use toml;
 
 pub struct Rate {
@@ -82,7 +83,9 @@ impl AsyncSim {
         let (s, command_receiver) = mpsc::channel();
         self.command_sender = Some(s);
 
+        debug!("Creating simulation handler...");
         self.run_handle = Some(std::thread::spawn(move || {
+            debug!("Simulation handler created. Initializing run...");
             AsyncSim::run_sim(config, command_receiver, output, outpath)
         }));
     }
@@ -98,15 +101,17 @@ impl AsyncSim {
         let mut current_vent_flow_percentage = 0.0;
         let mut current_dump_flow_percentage = 0.0;
 
+        // configure simulation
         let physics_rate = config["physics_rate_hz"].as_float().unwrap() as f32;
+        let max_sim_time = config["max_sim_time_s"].as_float().unwrap() as f32;
         let mut rate_sleeper = Rate::new(physics_rate);
 
         // set up data logger
         let mut writer = init_log_file(outpath);
 
+        debug!("Simulation run initialized. Starting loop...");
         loop {
             rate_sleeper.sleep();
-
             if let Ok(new_flow_percentages) = command_channel.try_recv() {
                 current_vent_flow_percentage = new_flow_percentages.vent_flow_percentage;
                 current_dump_flow_percentage = new_flow_percentages.dump_flow_percentage;
@@ -115,7 +120,6 @@ impl AsyncSim {
             step_input.vent_pwm = current_vent_flow_percentage;
             step_input.dump_pwm = current_dump_flow_percentage;
             step_input = simulate::step(step_input, &step_config);
-
             // Sync update all the fields
             {
                 let mut output = sim_output.lock().unwrap();
@@ -130,6 +134,30 @@ impl AsyncSim {
                 output.atmo_temp = step_input.atmo_temp;
                 output.atmo_pres = step_input.atmo_pres;
                 log_to_file(&output, &mut writer);
+            }
+            
+            // Print log to terminal
+            debug!(
+                "[{:.3} s] | Atmosphere @ {:} m: {:} K, {:} Pa",
+                step_input.time, step_input.altitude, step_input.atmo_temp, step_input.atmo_pres
+            );
+            info!(
+                "[{:.3} s] | HAB @ {:.2} m, {:.3} m/s, {:.3} m/s^2 | {:.2} kg gas, {:.2} kg ballast",
+                step_input.time,
+                step_input.altitude,
+                step_input.ascent_rate,
+                step_input.acceleration,
+                step_input.balloon.lift_gas.mass(),
+                step_input.ballast_mass
+            );
+            // Run for a certain amount of sim time or to a certain altitude
+            if step_input.time >= max_sim_time {
+                warn!("Simulation reached maximum time step. Stopping...");
+                break;
+            }
+            if step_input.altitude < 0.0 {
+                error!("Simulation altitude cannot be below zero. Stopping...");
+                break;
             }
         }
     }

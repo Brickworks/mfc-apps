@@ -18,7 +18,7 @@
 
 use std::fmt;
 
-use log::{error, debug};
+use log::error;
 
 const STANDARD_TEMPERATURE: f32 = 273.15; // [K]
 const STANDARD_PRESSURE: f32 = 101325.0; // [Pa]
@@ -219,10 +219,6 @@ impl Atmosphere {
         self.temperature = coesa_temperature(new_altitude);
         self.pressure = coesa_pressure(new_altitude);
         self.density = density(self.temperature, self.pressure, self.molar_mass);
-        debug!(
-            "Atmosphere @ {:}m | {:} K | {:} Pa | {:} kg/m^3",
-            self.altitude, self.temperature, self.pressure, self.density
-        )
     }
 
     pub fn temperature(self) -> f32 {

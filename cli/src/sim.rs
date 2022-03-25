@@ -1,69 +1,57 @@
-use std::time::Instant;
-use std::path::PathBuf;
-use toml::Value;
 use log::info;
+use std::path::PathBuf;
+use std::time::Instant;
+use toml::Value;
 
 use control_apps::{
     control_mngr::{ControlCommand, ControlMngr},
     measurement::Measurement,
 };
-use simulator::{async_sim, SimCommands, SimOutput};
+use simulator::{
+    async_sim::{self, AsyncSim},
+    SimCommands, SimOutput,
+};
 
-pub fn start_sim(ctrl_config: &PathBuf, sim_config: &PathBuf, outfile: &PathBuf) {
-    let sim_config_toml = std::fs::read_to_string(sim_config)
-        .unwrap()
-        .as_str()
-        .parse::<Value>()
-        .unwrap();
-    let ctrl_config_toml = std::fs::read_to_string(ctrl_config)
+pub fn start_sim(sim_config: &PathBuf, outfile: &PathBuf) {
+    let config = std::fs::read_to_string(sim_config)
         .unwrap()
         .as_str()
         .parse::<Value>()
         .unwrap();
 
-    info!(
-        "Setting up sim with the following config: \n{}",
-        sim_config_toml
-    );
+    info!("Setting up sim with the following config: \n{}", config);
+
+    // initialize the simulation
+    let mut sim = async_sim::AsyncSim::new(config, outfile.clone());
+    let mut rate_sleeper = async_sim::Rate::new(1.0);
+
+    // start the sim
+    sim.start();
+    loop {
+        sim.get_sim_output();
+        rate_sleeper.sleep();
+    }
+}
+
+fn start_control(ctrl_config: &PathBuf, sim: &AsyncSim) {
+    let config = std::fs::read_to_string(ctrl_config)
+        .unwrap()
+        .as_str()
+        .parse::<Value>()
+        .unwrap();
+
     info!(
         "Setting up altitude controller with following config: \n{}",
-        ctrl_config_toml
+        config
     );
-
-    // configure simulation
-    let max_sim_time = sim_config_toml["max_sim_time_s"].as_float().unwrap() as f32;
-    let mut sim = async_sim::AsyncSim::new(sim_config_toml, outfile.clone());
 
     // configure controller
-    let mut mngr = ControlMngr::new(
-        ctrl_config_toml["target_altitude_m"].as_float().unwrap() as f32,
-        ctrl_config_toml["vent_kp"].as_float().unwrap() as f32,
-        ctrl_config_toml["vent_ki"].as_float().unwrap() as f32,
-        ctrl_config_toml["vent_kd"].as_float().unwrap() as f32,
-        ctrl_config_toml["dump_kp"].as_float().unwrap() as f32,
-        ctrl_config_toml["dump_ki"].as_float().unwrap() as f32,
-        ctrl_config_toml["dump_kd"].as_float().unwrap() as f32,
-        ctrl_config_toml["altitude_floor_m"].as_float().unwrap() as f32,
-        ctrl_config_toml["error_deadzone_m"].as_float().unwrap() as f32,
-        ctrl_config_toml["error_ready_threshold_m"].as_float().unwrap() as f32,
-        ctrl_config_toml["speed_deadzone_m_s"].as_float().unwrap() as f32,
-        ctrl_config_toml["tlm_max_age_s"].as_float().unwrap() as u64,
-        ctrl_config_toml["min_ballast_kg"].as_float().unwrap() as f32,
-    );
-    let mut ctrl_sleeper =
-        async_sim::Rate::new(ctrl_config_toml["ctrl_rate_hz"].as_float().unwrap() as f32);
-    sim.start();
+    let mut ctrl_sleeper = async_sim::Rate::new(config["ctrl_rate_hz"].as_float().unwrap() as f32);
+    let mut mngr = ControlMngr::new(config);
 
     // now iterate until the altitude hits zero or time is too long
     loop {
         let sim_output = sim.get_sim_output();
-        // Run for a certain amount of sim time or to a certain altitude
-        if (sim_output.time_s >= max_sim_time)
-            || (sim_output.altitude <= 0.0 && sim_output.ascent_rate < 0.0)
-        {
-            break;
-        }
-
         // get commands and telemetry for the current timestep
         let cmd = update_control(&mut mngr, &sim_output);
 
