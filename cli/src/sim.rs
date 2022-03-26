@@ -33,37 +33,6 @@ pub fn start_sim(sim_config: &PathBuf, outfile: &PathBuf) {
     }
 }
 
-fn start_control(ctrl_config: &PathBuf, sim: &AsyncSim) {
-    let config = std::fs::read_to_string(ctrl_config)
-        .unwrap()
-        .as_str()
-        .parse::<Value>()
-        .unwrap();
-
-    info!(
-        "Setting up altitude controller with following config: \n{}",
-        config
-    );
-
-    // configure controller
-    let mut ctrl_sleeper = async_sim::Rate::new(config["ctrl_rate_hz"].as_float().unwrap() as f32);
-    let mut mngr = ControlMngr::new(config);
-
-    // now iterate until the altitude hits zero or time is too long
-    loop {
-        let sim_output = sim.get_sim_output();
-        // get commands and telemetry for the current timestep
-        let cmd = update_control(&mut mngr, &sim_output);
-
-        sim.send_commands(SimCommands {
-            vent_flow_percentage: cmd.vent_pwm,
-            dump_flow_percentage: cmd.dump_pwm,
-        });
-
-        ctrl_sleeper.sleep();
-    }
-}
-
 fn update_control(mngr: &mut ControlMngr, input: &SimOutput) -> ControlCommand {
     // pass simulation data to controller as sensor measurements
     let now = Instant::now();

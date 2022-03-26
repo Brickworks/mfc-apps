@@ -5,6 +5,7 @@ use log::error;
 
 use crate::sim;
 use crate::status;
+use crate::sys;
 
 #[derive(Parser)]
 #[clap(author, version, about)]
@@ -37,18 +38,54 @@ enum Commands {
     /// Generate a system status report
     Status {},
 
-    /// Configure and run a simulation
+    /// Start necessary systems for flight
+    FlightReady {
+        /// Altitude controller configuration to use
+        #[clap(
+            short,
+            long,
+            parse(from_os_str),
+            value_name = "TOML",
+            default_value = "../support_apps/config/control_config.toml"
+        )]
+        altctrl_config: PathBuf,
+    },
+
+    /// Start altitude control app
+    AltCtrl {
+        /// Controller configuration to use
+        #[clap(
+            short,
+            long,
+            parse(from_os_str),
+            value_name = "TOML",
+            default_value = "../support_apps/config/control_config.toml"
+        )]
+        config: PathBuf,
+    },
+
+    /// Physics simulation app
     ///
     /// Configure an asynchronous physics simulation in the background. This
     /// simulation runs on the MFC with flight software code running in the
     /// loop and logs the simulation output to a CSV file.
     Sim {
+        /// Simulator app commands
+        #[clap(subcommand)]
+        cmd: SimCmds,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+enum SimCmds {
+    /// Start a new simulation process
+    Start {
         /// Sets a custom simulation config file
         #[clap(
             short,
             long,
             parse(from_os_str),
-            value_name = "FILE",
+            value_name = "TOML",
             default_value = "../support_apps/config/sim_config.toml"
         )]
         sim_config: PathBuf,
@@ -58,24 +95,25 @@ enum Commands {
             short,
             long,
             parse(from_os_str),
-            value_name = "FILE",
+            value_name = "CSV",
             default_value = "./out.csv"
         )]
         outfile: PathBuf,
     },
 
-    /// Initiate flight sequence
-    Control {
-        /// Sets a custom altitude controller config file
-        #[clap(
-            short,
-            long,
-            parse(from_os_str),
-            value_name = "FILE",
-            default_value = "../support_apps/config/control_config.toml"
-        )]
-        ctrl_config: PathBuf,
+    /// Inspect a physics parameter in an existing simulation
+    Get {
+        /// Parameter to be inspect
+        param: String,
     },
+
+    /// Modify a physics parameter in an existing simulation
+    Set {
+        /// Parameter to be modified
+        param: String,
+        /// New value to set
+        value: String,
+    }
 }
 
 pub fn parse_inputs() {
@@ -83,20 +121,27 @@ pub fn parse_inputs() {
     let cli = Cli::parse();
     match &cli.command {
         Commands::Status {} => {
-            // print system information
             status::full_report()
         }
         Commands::Sim {
-            sim_config,
-            outfile,
+            cmd
         } => {
-            sim::start_sim(sim_config, outfile);
+            match cmd {
+                SimCmds::Start {
+                    sim_config,
+                    outfile,
+                } => {
+                    sim::start_sim(sim_config, outfile);
+                }
+                _ => {
+                    error!("Command not implemented yet!")
+                }
+            }
         }
-        Commands::Control {
-            ctrl_config,
+        Commands::AltCtrl {
+            config,
         } => {
-            // sim::start_control(ctrl_config);
-            error!("almost ready! come back later")
+            let control_mngr = sys::init_altctrl(config);
         }
         _ => {
             error!("Command not implemented yet!")
