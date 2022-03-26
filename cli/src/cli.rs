@@ -17,7 +17,7 @@ struct Cli {
 /*
     start physics sim   start an asychronous physics simulation
                         and start writing the results to a csv
-    
+
     modify sim param    "god mode" modify a parameter of the
                         simulation on the fly
                         - dry mass, ballast mass, gas mass
@@ -26,7 +26,7 @@ struct Cli {
 
     boot up             start the main execution loop, initialize
                         the logger and critical apps
-    
+
     toggle subsystem    turn on or off an app or hardware system
                         - control app
                         - radio
@@ -113,34 +113,26 @@ enum SimCmds {
         param: String,
         /// New value to set
         value: String,
-    }
+    },
 }
 
 pub fn parse_inputs() {
     // parse CLI input args and options
     let cli = Cli::parse();
     match &cli.command {
-        Commands::Status {} => {
-            status::full_report()
-        }
-        Commands::Sim {
-            cmd
-        } => {
-            match cmd {
-                SimCmds::Start {
-                    sim_config,
-                    outfile,
-                } => {
-                    sim::start_sim(sim_config, outfile);
-                }
-                _ => {
-                    error!("Command not implemented yet!")
-                }
+        Commands::Status {} => status::full_report(),
+        Commands::Sim { cmd } => match cmd {
+            SimCmds::Start {
+                sim_config,
+                outfile,
+            } => {
+                sim::start_sim(sim_config, outfile);
             }
-        }
-        Commands::AltCtrl {
-            config,
-        } => {
+            _ => {
+                error!("Command not implemented yet!")
+            }
+        },
+        Commands::AltCtrl { config } => {
             let control_mngr = sys::init_altctrl(config);
         }
         _ => {

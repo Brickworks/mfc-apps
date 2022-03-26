@@ -8,7 +8,7 @@ use control_apps::{
     measurement::Measurement,
 };
 use simulator::{
-    async_sim::{self, AsyncSim},
+    async_sim::{AsyncSim, Rate},
     SimCommands, SimOutput,
 };
 
@@ -22,8 +22,8 @@ pub fn start_sim(sim_config: &PathBuf, outfile: &PathBuf) {
     info!("Setting up sim with the following config: \n{}", config);
 
     // initialize the simulation
-    let mut sim = async_sim::AsyncSim::new(config, outfile.clone());
-    let mut rate_sleeper = async_sim::Rate::new(1.0);
+    let mut sim = AsyncSim::new(config, outfile.clone());
+    let mut rate_sleeper = Rate::new(1.0);
 
     // start the sim
     sim.start();
