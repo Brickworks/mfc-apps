@@ -86,7 +86,7 @@ enum SimCmds {
             long,
             parse(from_os_str),
             value_name = "TOML",
-            default_value = "../support_apps/config/sim_config.toml"
+            default_value = "../simulator/config/sim_config.toml"
         )]
         sim_config: PathBuf,
 
