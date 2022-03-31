@@ -1,16 +1,20 @@
+use serde::{Deserialize, Serialize};
+
 mod balloon;
 mod force;
 mod gas;
 
 pub mod async_sim;
 pub mod simulate;
+pub mod udp_sim;
 
+#[derive(Debug, Serialize, Deserialize)]
 pub struct SimCommands {
     pub vent_flow_percentage: f32,
     pub dump_flow_percentage: f32,
 }
 
-#[derive(Default, Copy, Clone)]
+#[derive(Debug, Default, Copy, Clone, Serialize, Deserialize)]
 pub struct SimOutput {
     pub time_s: f32,
     pub altitude: f32,
