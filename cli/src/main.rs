@@ -1,6 +1,5 @@
 extern crate pretty_env_logger;
 mod cli;
-mod sim;
 mod status;
 mod sys;
 
