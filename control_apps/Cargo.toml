@@ -11,5 +11,6 @@ bitflags = "1.3.2"
 log = { version = "0.4", features = ["release_max_level_debug"] }
 pretty_env_logger = "0.4.0"
 pid = "3.0.0"
+toml = "0.5"
 # nalgebra = "0.24.1"
 # adskalman = "0.5.0"

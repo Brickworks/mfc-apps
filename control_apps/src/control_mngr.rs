@@ -6,6 +6,7 @@
 
 use std::fmt;
 use std::time::Duration;
+use toml::Value;
 
 use bitflags::bitflags;
 use log::{debug, info, warn};
@@ -77,21 +78,38 @@ pub struct ControlMngr {
 }
 
 impl ControlMngr {
-    pub fn new(
-        target_altitude: f32,
-        vent_kp: f32,        // vent valve controller proportional gain
-        vent_ki: f32,        // vent valve controller integral gain
-        vent_kd: f32,        // vent valve controller derivatitve gain
-        dump_kp: f32,        // dump valve controller proportional gain
-        dump_ki: f32,        // dump valve controller integral gain
-        dump_kd: f32,        // dump valve controller derivatitve gain
-        altitude_floor: f32, // minimum allowed altitude in meters
-        error_deadzone: f32, // magnitude of margin to allow without actuation
-        error_ready: f32,    // basically opposite of deadzone
-        speed_deadzone: f32, // magnitude of margin to allow without actuation
-        tlm_max_age: u64,    // maximum age of telemetry to act on
-        min_ballast: f32,    // abort if ballast is less than this in kg
-    ) -> Self {
+    pub fn new(config: Value) -> Self {
+        info!(
+            "Setting up altitude controller with following config: \n{}",
+            config
+        );
+        let target_altitude = config["target_altitude_m"]
+            .as_float().unwrap() as f32; // desired flight altitude
+        let vent_kp = config["vent_kp"]
+            .as_float().unwrap() as f32; // vent valve controller proportional gain
+        let vent_ki = config["vent_ki"]
+            .as_float().unwrap() as f32; // vent valve controller integral gain
+        let vent_kd = config["vent_kd"]
+            .as_float().unwrap() as f32; // vent valve controller derivatitve gain
+        let dump_kp = config["dump_kp"]
+            .as_float().unwrap() as f32; // dump valve controller proportional gain
+        let dump_ki = config["dump_ki"]
+            .as_float().unwrap() as f32; // dump valve controller integral gain
+        let dump_kd = config["dump_kd"]
+            .as_float().unwrap() as f32; // dump valve controller derivatitve gain
+        let altitude_floor = config["altitude_floor_m"]
+            .as_float().unwrap() as f32; // minimum allowed altitude in meters
+        let error_deadzone = config["error_deadzone_m"]
+            .as_float().unwrap() as f32; // magnitude of margin to allow without actuation
+        let error_ready = config["error_ready_threshold_m"]
+            .as_float().unwrap() as f32; // basically opposite of deadzone
+        let speed_deadzone = config["speed_deadzone_m_s"]
+            .as_float().unwrap() as f32; // magnitude of margin to allow without actuation
+        let tlm_max_age = Duration::from_secs(config["tlm_max_age_s"]
+            .as_float().unwrap() as u64); // maximum age of telemetry to act on
+        let min_ballast = config["min_ballast_kg"]
+            .as_float().unwrap() as f32; // abort if ballast is less than this in kg
+
         // initialize valve objects
         let vent_valve = Valve::new(-1.0, 0.0, vent_kp, vent_ki, vent_kd, String::from("VENTER"));
         let dump_valve = Valve::new(0.0, 1.0, dump_kp, dump_ki, dump_kd, String::from("DUMPER"));
@@ -126,7 +144,7 @@ impl ControlMngr {
             error_deadzone,
             error_ready,
             speed_deadzone,
-            tlm_max_age: Duration::from_secs(tlm_max_age),
+            tlm_max_age,
             min_ballast,
         };
     }

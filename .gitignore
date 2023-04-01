@@ -13,7 +13,3 @@ Cargo.lock
 .vscode
 .DS_Store
 desktop.ini
-
-# test artifacts
-out.csv
-out_plot.html
